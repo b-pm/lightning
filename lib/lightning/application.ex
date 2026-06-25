@@ -131,6 +131,11 @@ defmodule Lightning.Application do
         end
       end)
 
+    :opentelemetry_cowboy.setup()
+    OpentelemetryPhoenix.setup(adapter: :cowboy2)
+    OpentelemetryEcto.setup([:lightning, :repo])
+    OpentelemetryOban.setup()
+
     children =
       [
         Lightning.PromEx,
