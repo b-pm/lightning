@@ -109,6 +109,16 @@ defmodule Lightning.Application do
         )
       )
 
+    schema_reconciler_childspec =
+      if Application.get_env(
+           :lightning,
+           Lightning.Credentials.SchemaReconciler,
+           enabled: true
+         )[:enabled] do
+        {Lightning.Credentials.SchemaReconciler,
+         name: Lightning.Credentials.SchemaReconciler, sup: Lightning.Adaptors}
+      end
+
     goth =
       Application.get_env(:lightning, Lightning.Google, [])
       |> then(fn config ->
@@ -151,6 +161,7 @@ defmodule Lightning.Application do
         LightningWeb.WorkerPresence,
         adaptor_service_childspec,
         {Lightning.Adaptors.Supervisor, name: Lightning.Adaptors},
+        schema_reconciler_childspec,
         {Lightning.TaskWorker, name: :cli_task_worker},
         {Lightning.Runtime.RuntimeManager,
          worker_secret: Lightning.Config.worker_secret(),
