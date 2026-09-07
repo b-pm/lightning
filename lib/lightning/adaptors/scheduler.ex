@@ -359,7 +359,10 @@ defmodule Lightning.Adaptors.Scheduler do
             &fetch_if_changed(strategy, &1, existing_by_name, state),
             max_concurrency: @fetch_max_concurrency,
             ordered: false,
-            on_timeout: :kill_task
+            on_timeout: :kill_task,
+            timeout:
+              Config.strategy_opts(strategy)[:http_timeout] ||
+                :timer.seconds(30)
           )
           |> Enum.reduce({[], 0, 0}, fn
             {:ok, {:fetched, record}}, {acc, c, e} -> {[record | acc], c + 1, e}

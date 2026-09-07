@@ -394,6 +394,42 @@ defmodule Lightning.Adaptors.SchedulerTest do
     end
   end
 
+  describe "fetch timeout" do
+    test "a fetch_adaptor call taking longer than 5s (but under the 30s " <>
+           "http_timeout) still completes and persists",
+         %{sup: sup} do
+      source = AdaptorsSupervisor.source(sup)
+      source_topic = AdaptorsSupervisor.source_topic(sup)
+
+      {:ok, _} = Catalogue.upsert_adaptor(adaptor_record())
+
+      expect(Lightning.Adaptors.StrategyMock, :list_adaptors, fn ->
+        {:ok, [%{name: "@openfn/language-http", latest_version: "2.0.0"}]}
+      end)
+
+      expect(
+        Lightning.Adaptors.StrategyMock,
+        :fetch_adaptor,
+        1,
+        fn "@openfn/language-http" ->
+          Process.sleep(6_500)
+          {:ok, adaptor_record(latest_version: "2.0.0")}
+        end
+      )
+
+      :ok = Phoenix.PubSub.subscribe(Lightning.PubSub, source_topic)
+      start_scheduler(sup)
+
+      sched_name = AdaptorsSupervisor.global_scheduler_name(sup)
+      Scheduler.refresh_now(sched_name)
+
+      assert_receive {:changed, "@openfn/language-http", ^source}, 10_000
+
+      row = Catalogue.get_adaptor("@openfn/language-http", source)
+      assert row.latest_version == "2.0.0"
+    end
+  end
+
   describe "refresh_now/1" do
     test "triggers an immediate tick on the leader", %{sup: sup} do
       test_pid = self()
