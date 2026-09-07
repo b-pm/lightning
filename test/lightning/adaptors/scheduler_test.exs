@@ -85,6 +85,14 @@ defmodule Lightning.Adaptors.SchedulerTest do
     pid
   end
 
+  defp drain_tick_ran do
+    receive do
+      :tick_ran -> drain_tick_ran()
+    after
+      0 -> :ok
+    end
+  end
+
   defp adaptor_record(overrides \\ []) do
     overrides = Map.new(overrides)
 
@@ -412,6 +420,46 @@ defmodule Lightning.Adaptors.SchedulerTest do
       assert :ok = Scheduler.refresh_now(sched_name)
 
       assert_receive :tick_ran, 2000
+    end
+
+    test "repeated calls do not leak extra recurring tick chains", %{sup: sup} do
+      test_pid = self()
+
+      stub(Lightning.Adaptors.StrategyMock, :list_adaptors, fn ->
+        send(test_pid, :tick_ran)
+        {:ok, []}
+      end)
+
+      start_scheduler(sup, interval: 200)
+
+      sched_name = AdaptorsSupervisor.global_scheduler_name(sup)
+      {:global, gname} = sched_name
+      pid = :global.whereis_name(gname)
+
+      # Init tick, then two manual refresh_now calls — each waited out so it
+      # starts its own cycle instead of coalescing into the previous one.
+      assert_receive :tick_ran, 2000
+      assert_eventually(:sys.get_state(pid).refresh == nil, 2000)
+
+      assert :ok = Scheduler.refresh_now(sched_name)
+      assert_receive :tick_ran, 2000
+      assert_eventually(:sys.get_state(pid).refresh == nil, 2000)
+
+      assert :ok = Scheduler.refresh_now(sched_name)
+      assert_receive :tick_ran, 2000
+      assert_eventually(:sys.get_state(pid).refresh == nil, 2000)
+
+      # Drain any tick_ran messages belonging to the manual calls themselves
+      # before counting the chain(s) that fire on their own over one interval.
+      drain_tick_ran()
+
+      # Only the original init-driven chain should remain, so its next tick
+      # is ~200ms away and nothing else should arrive right behind it. With
+      # the bug, each refresh_now leaves behind its own self-perpetuating
+      # chain, all armed within milliseconds of each other above, so a
+      # second tick_ran would land almost immediately after the first.
+      assert_receive :tick_ran, 300
+      refute_receive :tick_ran, 100
     end
   end
 

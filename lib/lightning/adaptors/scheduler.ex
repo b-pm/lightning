@@ -262,8 +262,7 @@ defmodule Lightning.Adaptors.Scheduler do
   @impl true
   def handle_call(:refresh_now, _from, state) do
     Logger.info("Adaptors[#{state.source}]: refresh_now requested")
-    send(self(), :tick)
-    {:reply, :ok, state}
+    {:reply, :ok, maybe_start_refresh(state)}
   end
 
   def handle_call(:await_refresh, from, state) do
@@ -272,8 +271,7 @@ defmodule Lightning.Adaptors.Scheduler do
     )
 
     state = %{state | waiters: [from | state.waiters]}
-    state = if state.refresh, do: state, else: start_refresh(state)
-    {:noreply, state}
+    {:noreply, maybe_start_refresh(state)}
   end
 
   def handle_call({:refresh_package, name}, from, state) do
@@ -324,6 +322,10 @@ defmodule Lightning.Adaptors.Scheduler do
 
         {:error, reason}
     end
+  end
+
+  defp maybe_start_refresh(state) do
+    if state.refresh, do: state, else: start_refresh(state)
   end
 
   defp start_refresh(state) do
