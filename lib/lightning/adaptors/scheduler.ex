@@ -378,10 +378,10 @@ defmodule Lightning.Adaptors.Scheduler do
           |> Enum.map(fn record -> persist_with_icons(record, icons, state) end)
           |> Enum.count(&(&1 == :ok))
 
-        # Rows just fetched above already carry fresh icons via
-        # persist_with_icons/3; everything else (touched or errored) is
-        # reconciled here so an icon-only change (no version bump) still
-        # lands, not just rows entirely missing an icon.
+        # Rows fetched this tick already have fresh icons from
+        # persist_with_icons/3. Everything else — touched or errored — is
+        # reconciled here too, so an icon-only upstream change still lands
+        # even when the version doesn't bump.
         fetched_names = MapSet.new(fetched, & &1.name)
 
         unfetched_rows =

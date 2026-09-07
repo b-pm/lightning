@@ -493,11 +493,10 @@ defmodule Lightning.Adaptors.SchedulerTest do
       # before counting the chain(s) that fire on their own over one interval.
       drain_tick_ran()
 
-      # Only the original init-driven chain should remain, so its next tick
-      # is ~200ms away and nothing else should arrive right behind it. With
-      # the bug, each refresh_now leaves behind its own self-perpetuating
-      # chain, all armed within milliseconds of each other above, so a
-      # second tick_ran would land almost immediately after the first.
+      # Only the init-driven chain should still be ticking, arriving ~200ms
+      # out. A leaked chain per refresh_now call would fire almost
+      # immediately instead, since they were all armed within milliseconds
+      # of each other above.
       assert_receive :tick_ran, 300
       refute_receive :tick_ran, 100
     end
@@ -644,8 +643,8 @@ defmodule Lightning.Adaptors.SchedulerTest do
           adaptor_record(
             icon_square_ext: "png",
             icon_square_sha256: old_sha,
-            # Both shapes present (row is not "missing" icons) — only the
-            # square shape's bytes changed upstream.
+            # Both icon shapes already exist on the row; only the square
+            # shape's bytes changed upstream.
             icon_rectangle_ext: "png",
             icon_rectangle_sha256: rect_sha
           )
@@ -654,8 +653,8 @@ defmodule Lightning.Adaptors.SchedulerTest do
       new_bytes = "NEW_ICON_BYTES"
       new_sha = :crypto.hash(:sha256, new_bytes)
 
-      # Upstream reports the same version, so the diff path :touches this
-      # adaptor rather than re-fetching it — only the icon changed.
+      # Upstream reports the same version, so the diff path marks this
+      # adaptor :touched instead of re-fetching it — only the icon changed.
       expect(Lightning.Adaptors.StrategyMock, :list_adaptors, fn ->
         {:ok, [%{name: "@openfn/language-http", latest_version: "1.0.0"}]}
       end)
