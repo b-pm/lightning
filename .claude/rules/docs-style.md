@@ -1,6 +1,13 @@
 ---
 paths:
-  - "*.md"
+  - "/ADAPTORS.md"
+  - "/CHANGELOG.md"
+  - "/DEPLOYMENT.md"
+  - "/PROVISIONING.md"
+  - "/README.md"
+  - "/RUNNINGLOCAL.md"
+  - "/SECURITY.md"
+  - "/WORKERS.md"
   - "tooling/**/README.md"
 ---
 
