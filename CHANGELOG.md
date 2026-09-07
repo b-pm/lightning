@@ -27,7 +27,12 @@ and this project adheres to
 
 - Lightning now keeps its own adaptor registry instead of fetching the list from
   npm at startup, so new adaptors and versions show up without a rebuild or
-  redeploy. See [ADAPTORS.md](ADAPTORS.md).
+  redeploy, and the registry lists every `@openfn/language-*` package npm has
+  for the org rather than only what npm's search endpoint ranks. Deprecated
+  adaptors and deprecated versions no longer appear as new choices in the
+  credential type picker or the job adaptor picker, though jobs and credentials
+  that already reference one keep working unchanged. See
+  [ADAPTORS.md](ADAPTORS.md).
   [#4801](https://github.com/OpenFn/lightning/pull/4801)
 
 ### Fixed

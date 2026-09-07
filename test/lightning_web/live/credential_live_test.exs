@@ -11,6 +11,8 @@ defmodule LightningWeb.CredentialLiveTest do
   import Swoosh.TestAssertions
 
   alias Lightning.Accounts.User
+  alias Lightning.Adaptors.Config
+  alias Lightning.Adaptors.Supervisor, as: AdaptorsSupervisor
   alias Lightning.Credentials
   alias Lightning.Credentials.Credential
 
@@ -2757,6 +2759,32 @@ defmodule LightningWeb.CredentialLiveTest do
         assert img_src =~
                  "/adaptors/icons/#{URI.encode(full_name, &URI.char_unreserved?/1)}/square-"
       end
+    end
+
+    test "omits a deprecated adaptor from the type options", %{conn: conn} do
+      insert(:adaptor, name: "deprecated-adaptor", deprecated: true)
+
+      # `seed_all_credential_schemas/0` primes the packages cache by hand
+      # (bypassing `Catalogue.list_package_metas/1`), so drop it here to
+      # force a fresh DB-backed read that can see the row above.
+      cache = AdaptorsSupervisor.cache_name(Config.default_instance())
+      source = AdaptorsSupervisor.source(Config.default_instance())
+      Cachex.del(cache, {:packages, source})
+
+      {:ok, view, _html} = live(conn, ~p"/credentials")
+
+      html = open_create_credential_modal(view)
+      html_tree = Floki.parse_document!(html)
+
+      assert Floki.find(
+               html_tree,
+               "label[for='credential-schema-picker_selected_http']"
+             ) != []
+
+      assert Floki.find(
+               html_tree,
+               "label[for='credential-schema-picker_selected_deprecated-adaptor']"
+             ) == []
     end
   end
 
