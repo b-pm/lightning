@@ -5,9 +5,12 @@ defmodule Lightning.Adaptors.NPM do
 
   Implements the four `Lightning.Adaptors.Strategy` callbacks:
 
-    * `c:Lightning.Adaptors.Strategy.list_adaptors/0` — single search-API
-      call returning `name + latest_version` for every
-      `@openfn/language-*` package.
+    * `c:Lightning.Adaptors.Strategy.list_adaptors/0` — merges the
+      `@openfn` org's authoritative package listing with the search API's
+      cheap version lookup, returning `name + latest_version` for every
+      `@openfn/language-*` package. See
+      `Lightning.Adaptors.NPM.Registry` for why this is two calls, not
+      one.
     * `c:Lightning.Adaptors.Strategy.fetch_adaptor/1` — packument fetch +
       per-version decode and latest-version schema retrieval via
       jsDelivr. Icon fields are **not** stamped here; the Scheduler
@@ -35,8 +38,9 @@ defmodule Lightning.Adaptors.NPM do
   Each sub-module issues at most a handful of single-shot Tesla requests
   bounded by `http_timeout`. No retry, no backoff, no circuit-breaker —
   transient failures (5xx, timeout, nxdomain) of the *primary* request
-  (`packument` for `fetch_adaptor/1`, `search` for `list_adaptors/0` and
-  `fetch_icons/1`) surface as `{:error, term()}` unchanged. Schema and
+  (`packument` for `fetch_adaptor/1`, the org package listing for
+  `list_adaptors/0` and `fetch_icons/1`) surface as `{:error, term()}`
+  unchanged. Schema and
   icon fetches inside `fetch_adaptor/1` and `fetch_icons/1` are
   best-effort: a single icon miss degrades that entry to absence rather
   than failing the whole record.
