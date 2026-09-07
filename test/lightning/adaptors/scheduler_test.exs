@@ -395,38 +395,42 @@ defmodule Lightning.Adaptors.SchedulerTest do
   end
 
   describe "fetch timeout" do
-    test "a fetch_adaptor call taking longer than 5s (but under the 30s " <>
-           "http_timeout) still completes and persists",
+    test "per-adaptor fetch is bounded by the strategy's http_timeout, " <>
+           "not Task's 5s default",
          %{sup: sup} do
-      source = AdaptorsSupervisor.source(sup)
-      source_topic = AdaptorsSupervisor.source_topic(sup)
+      original = Application.get_env(:lightning, Lightning.Adaptors.StrategyMock)
 
-      {:ok, _} = Catalogue.upsert_adaptor(adaptor_record())
+      Application.put_env(
+        :lightning,
+        Lightning.Adaptors.StrategyMock,
+        Keyword.put(original, :http_timeout, 100)
+      )
+
+      on_exit(fn ->
+        Application.put_env(
+          :lightning,
+          Lightning.Adaptors.StrategyMock,
+          original
+        )
+      end)
 
       expect(Lightning.Adaptors.StrategyMock, :list_adaptors, fn ->
         {:ok, [%{name: "@openfn/language-http", latest_version: "2.0.0"}]}
       end)
 
-      expect(
-        Lightning.Adaptors.StrategyMock,
-        :fetch_adaptor,
-        1,
-        fn "@openfn/language-http" ->
-          Process.sleep(6_500)
-          {:ok, adaptor_record(latest_version: "2.0.0")}
+      # Never returns; only the async_stream timeout can end it. With the
+      # 5s default the await below would time out, so it passing shows
+      # the configured budget is what's being applied.
+      expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, fn _ ->
+        receive do
         end
-      )
+      end)
 
-      :ok = Phoenix.PubSub.subscribe(Lightning.PubSub, source_topic)
       start_scheduler(sup)
-
       sched_name = AdaptorsSupervisor.global_scheduler_name(sup)
-      Scheduler.refresh_now(sched_name)
 
-      assert_receive {:changed, "@openfn/language-http", ^source}, 10_000
-
-      row = Catalogue.get_adaptor("@openfn/language-http", source)
-      assert row.latest_version == "2.0.0"
+      assert {:ok, %{listed: 1, errors: 1}} =
+               Scheduler.await_refresh(sched_name, 2_000)
     end
   end
 
