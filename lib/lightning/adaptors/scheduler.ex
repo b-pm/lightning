@@ -378,7 +378,16 @@ defmodule Lightning.Adaptors.Scheduler do
           |> Enum.map(fn record -> persist_with_icons(record, icons, state) end)
           |> Enum.count(&(&1 == :ok))
 
-        healed = heal_missing_icons(icons, state)
+        # Rows just fetched above already carry fresh icons via
+        # persist_with_icons/3; everything else (touched or errored) is
+        # reconciled here so an icon-only change (no version bump) still
+        # lands, not just rows entirely missing an icon.
+        fetched_names = MapSet.new(fetched, & &1.name)
+
+        unfetched_rows =
+          Enum.reject(existing_rows, &MapSet.member?(fetched_names, &1.name))
+
+        healed = reapply_icons(unfetched_rows, icons, state).updated
         not_modified = count_not_modified(icons)
 
         listed = length(upstream)
@@ -523,24 +532,6 @@ defmodule Lightning.Adaptors.Scheduler do
     Map.put(record, :"icon_#{shape}_etag", etag)
   end
 
-  # Tops up icons on rows currently missing at least one shape. Runs
-  # after the main upsert pass on every tick — cheap, scoped to rows
-  # with gaps, and self-correcting after a strategy outage.
-  defp heal_missing_icons(icons, _state) when map_size(icons) == 0, do: 0
-
-  defp heal_missing_icons(icons, state) do
-    state.source
-    |> Catalogue.list_missing_icons()
-    |> Enum.reduce(0, fn row, acc ->
-      package_icons = Map.get(icons, row.name, %{})
-
-      case apply_icons_to_existing(row, package_icons, state) do
-        :updated -> acc + 1
-        :unchanged -> acc
-      end
-    end)
-  end
-
   defp reapply_icons(existing_rows, icons, state) do
     Enum.reduce(existing_rows, %{updated: 0, unchanged: 0}, fn row, acc ->
       package_icons = Map.get(icons, row.name, %{})
@@ -552,9 +543,8 @@ defmodule Lightning.Adaptors.Scheduler do
     end)
   end
 
-  # `row` is either an Adaptor struct (from list_adaptors/1) or a lean
-  # map (from list_missing_icons/1) — both expose :name and the icon
-  # sha256 fields, which is all we need.
+  # `row` is an Adaptor struct (from list_adaptors/1), which exposes
+  # :name and the icon sha256 fields, which is all we need.
   defp apply_icons_to_existing(_row, package_icons, _state)
        when map_size(package_icons) == 0,
        do: :unchanged

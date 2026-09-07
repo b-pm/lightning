@@ -627,6 +627,73 @@ defmodule Lightning.Adaptors.SchedulerTest do
       assert row.icon_square_sha256 == nil
     end
 
+    test "updates an icon-only change on the periodic tick even when the " <>
+           "package's version did not bump",
+         %{sup: sup} do
+      source = AdaptorsSupervisor.source(sup)
+
+      old_sha = :crypto.hash(:sha256, "OLD")
+      rect_sha = :crypto.hash(:sha256, "RECT")
+
+      {:ok, _} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(
+            icon_square_ext: "png",
+            icon_square_sha256: old_sha,
+            # Both shapes present (row is not "missing" icons) — only the
+            # square shape's bytes changed upstream.
+            icon_rectangle_ext: "png",
+            icon_rectangle_sha256: rect_sha
+          )
+        )
+
+      new_bytes = "NEW_ICON_BYTES"
+      new_sha = :crypto.hash(:sha256, new_bytes)
+
+      # Upstream reports the same version, so the diff path :touches this
+      # adaptor rather than re-fetching it — only the icon changed.
+      expect(Lightning.Adaptors.StrategyMock, :list_adaptors, fn ->
+        {:ok, [%{name: "@openfn/language-http", latest_version: "1.0.0"}]}
+      end)
+
+      expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, 0, fn _ ->
+        :unreachable
+      end)
+
+      expect(Lightning.Adaptors.StrategyMock, :fetch_icons, fn _opts ->
+        {:ok,
+         %{
+           "@openfn/language-http" => %{
+             square: %{data: new_bytes, ext: "png", sha256: new_sha}
+           }
+         }}
+      end)
+
+      source_topic = AdaptorsSupervisor.source_topic(sup)
+      :ok = Phoenix.PubSub.subscribe(Lightning.PubSub, source_topic)
+      start_scheduler(sup)
+
+      sched_name = AdaptorsSupervisor.global_scheduler_name(sup)
+      :ok = Scheduler.refresh_now(sched_name)
+
+      assert_receive {:changed, "@openfn/language-http", ^source}, 2000
+
+      row = Catalogue.get_adaptor("@openfn/language-http", source)
+      assert row.latest_version == "1.0.0"
+      assert row.icon_square_ext == "png"
+      assert row.icon_square_sha256 == new_sha
+
+      icon_path =
+        Lightning.Adaptors.IconCache.path(
+          source,
+          "@openfn/language-http",
+          :square,
+          "png"
+        )
+
+      File.rm(icon_path)
+    end
+
     test "self-heals iconless rows on the periodic tick", %{sup: sup} do
       source = AdaptorsSupervisor.source(sup)
 
