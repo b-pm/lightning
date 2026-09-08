@@ -332,7 +332,7 @@ defmodule Lightning.Adaptors.Store do
   #
   # Every fallback returns an inner `{:ok, _} | {:error, _}`, whichever
   # wrapper it chooses, so the wrapper tuple's second element is itself
-  # the public value we want to return — including a committed
+  # the public value we want to return, including a committed
   # `{:error, _}`, which comes back as `{:ok, {:error, _}}` on a later
   # hit. Cachex-side `{:error, _}` passes through unchanged.
   @spec unwrap(tuple()) :: {:ok, term()} | {:error, term()}

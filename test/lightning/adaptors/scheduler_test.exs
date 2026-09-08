@@ -246,7 +246,7 @@ defmodule Lightning.Adaptors.SchedulerTest do
       assert_receive :list_adaptors_called, 2000
 
       # Allow the spawned task to complete before asserting no broadcast.
-      refute_receive {:changed, _, _}, 200
+      refute_receive {:changed, _, _}
 
       row = Catalogue.get_adaptor("@openfn/language-http", source)
       assert DateTime.compare(row.checked_at, checked_at_before) == :gt
@@ -379,7 +379,7 @@ defmodule Lightning.Adaptors.SchedulerTest do
       start_scheduler(sup)
 
       assert_receive :first_fetch, 2000
-      refute_receive {:changed, _, _}, 200
+      refute_receive {:changed, _, _}
       assert Catalogue.get_adaptor(name, source) == nil
 
       expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, 1, fn ^name ->
@@ -409,7 +409,7 @@ defmodule Lightning.Adaptors.SchedulerTest do
       start_scheduler(sup)
 
       assert_receive :list_adaptors_called, 2000
-      refute_receive {:changed, _, _}, 200
+      refute_receive {:changed, _, _}
     end
 
     test "fetch_adaptor error: logs warning, continues to next adaptor", %{

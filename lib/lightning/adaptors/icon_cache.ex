@@ -20,10 +20,10 @@ defmodule Lightning.Adaptors.IconCache do
   Concurrent first-request fetchers are coalesced upstream by Cachex's
   courier on `{:icon_bytes, source, name, shape}` inside
   `Lightning.Adaptors.Store.icon/3`, and all in-flight peers receive the
-  courier's result for free. Bytes that verify are left uncommitted —
-  this directory is their cache — but bytes that disagree with the row's
-  sha or extension are committed as an error, so the disagreement is not
-  re-fetched from the source on every request until the row moves.
+  courier's result for free. Bytes that verify are left uncommitted,
+  since this directory is their cache, but bytes that disagree with the
+  row's sha or extension are committed as an error, so the disagreement
+  is not re-fetched from the source on every request until the row moves.
   The temp-then-rename in `write!/5` is the belt-and-
   braces guarantee for the file-write step itself: readers never observe
   a half-written file.
