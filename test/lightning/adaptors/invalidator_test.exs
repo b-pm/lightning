@@ -25,7 +25,7 @@ defmodule Lightning.Adaptors.InvalidatorTest do
   end
 
   describe "handle_info/2 - {:changed, name, source}" do
-    test "evicts all five matching cache keys on broadcast", %{
+    test "evicts all seven matching cache keys on broadcast", %{
       sup: sup,
       cache: cache,
       inv_name: inv_name
@@ -43,6 +43,14 @@ defmodule Lightning.Adaptors.InvalidatorTest do
         {:ok, %{icon_square_ext: "svg"}}
       )
 
+      Cachex.put!(cache, {:icon_bytes, source, name, :square}, {:ok, "/a.png"})
+
+      Cachex.put!(
+        cache,
+        {:icon_bytes, source, name, :rectangle},
+        {:error, {:ext_mismatch, expected: "png", got: "svg"}}
+      )
+
       Cachex.put!(cache, {:packages, source}, {:ok, [%{name: name}]})
       Cachex.put!(cache, {:catalogue, source}, {:ok, {{nil, 0}, []}})
 
@@ -57,6 +65,11 @@ defmodule Lightning.Adaptors.InvalidatorTest do
       assert {:ok, nil} = Cachex.get(cache, {:schema, name, source})
       assert {:ok, nil} = Cachex.get(cache, {:versions, name, source})
       assert {:ok, nil} = Cachex.get(cache, {:icon_meta, name, source})
+      assert {:ok, nil} = Cachex.get(cache, {:icon_bytes, source, name, :square})
+
+      assert {:ok, nil} =
+               Cachex.get(cache, {:icon_bytes, source, name, :rectangle})
+
       assert {:ok, nil} = Cachex.get(cache, {:packages, source})
       assert {:ok, nil} = Cachex.get(cache, {:catalogue, source})
     end

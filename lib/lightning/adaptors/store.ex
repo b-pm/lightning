@@ -145,13 +145,15 @@ defmodule Lightning.Adaptors.Store do
             {:ignore, {:ok, IconCache.path(source, name, shape, ext)}}
 
           got ->
-            {:ignore,
+            {:commit,
              {:error, {:icon_sha_mismatch, expected: expected_sha, got: got}}}
         end
 
       {:ok, %{ext: other_ext}} ->
-        {:ignore, {:error, {:ext_mismatch, expected: ext, got: other_ext}}}
+        {:commit, {:error, {:ext_mismatch, expected: ext, got: other_ext}}}
 
+      # A transport failure says nothing about the icon, so it is never
+      # cached; only a disagreement between the row and the bytes is.
       {:error, _} = err ->
         {:ignore, err}
     end
@@ -387,10 +389,11 @@ defmodule Lightning.Adaptors.Store do
   #   * `{:ignore, value}` — fallback ran and chose not to cache
   #   * `{:error, term}` — Cachex-side failure (fallback raised, etc.)
   #
-  # Our fallbacks return `{:commit, {:ok, _}}` / `{:ignore, {:error, _}}`,
-  # so the wrapper tuple's second element is itself the public
-  # `{:ok, _} | {:error, _}` we want to return. Cachex-side `{:error, _}`
-  # passes through unchanged.
+  # Every fallback returns an inner `{:ok, _} | {:error, _}`, whichever
+  # wrapper it chooses, so the wrapper tuple's second element is itself
+  # the public value we want to return — including a committed
+  # `{:error, _}`, which comes back as `{:ok, {:error, _}}` on a later
+  # hit. Cachex-side `{:error, _}` passes through unchanged.
   @spec unwrap(tuple()) :: {:ok, term()} | {:error, term()}
   defp unwrap({:ok, inner}), do: inner
   defp unwrap({:commit, inner}), do: inner

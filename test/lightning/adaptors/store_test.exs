@@ -525,8 +525,10 @@ defmodule Lightning.Adaptors.StoreTest do
     end
 
     test "Strategy returns bytes that don't match the row's expected sha", %{
-      sup: sup
+      sup: sup,
+      cache: cache
     } do
+      source = AdaptorsSupervisor.source(sup)
       name = unique_name("corrupt")
 
       {:ok, _} =
@@ -544,6 +546,41 @@ defmodule Lightning.Adaptors.StoreTest do
       end)
 
       assert {:error, {:icon_sha_mismatch, _}} = Store.icon(sup, name, :square)
+
+      assert {:ok, {:error, {:icon_sha_mismatch, _}}} =
+               Cachex.get(cache, {:icon_bytes, source, name, :square})
+
+      assert {:error, {:icon_sha_mismatch, _}} = Store.icon(sup, name, :square)
+    end
+
+    test "Strategy returns an extension the row doesn't claim", %{
+      sup: sup,
+      cache: cache
+    } do
+      source = AdaptorsSupervisor.source(sup)
+      name = unique_name("wrong-ext")
+
+      {:ok, _} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(
+            name: name,
+            icon_square_ext: "png",
+            icon_square_sha256: :crypto.hash(:sha256, "EXPECTED_BYTES")
+          )
+        )
+
+      expect(Lightning.Adaptors.StrategyMock, :fetch_icon, 1, fn ^name,
+                                                                 :square ->
+        {:ok, %{data: "EXPECTED_BYTES", ext: "svg"}}
+      end)
+
+      assert {:error, {:ext_mismatch, expected: "png", got: "svg"}} =
+               Store.icon(sup, name, :square)
+
+      assert {:ok, {:error, {:ext_mismatch, _}}} =
+               Cachex.get(cache, {:icon_bytes, source, name, :square})
+
+      assert {:error, {:ext_mismatch, _}} = Store.icon(sup, name, :square)
     end
 
     test "disk miss + Strategy success writes to disk and returns path", %{
@@ -591,7 +628,7 @@ defmodule Lightning.Adaptors.StoreTest do
           )
         )
 
-      expect(Lightning.Adaptors.StrategyMock, :fetch_icon, 1, fn _, _ ->
+      expect(Lightning.Adaptors.StrategyMock, :fetch_icon, 2, fn _, _ ->
         {:error, :upstream_5xx}
       end)
 
@@ -599,6 +636,8 @@ defmodule Lightning.Adaptors.StoreTest do
 
       assert {:ok, nil} =
                Cachex.get(cache, {:icon_bytes, source, name, :square})
+
+      assert {:error, :upstream_5xx} = Store.icon(sup, name, :square)
     end
 
     test "concurrent first-callers coalesce onto one Strategy fetch", %{
