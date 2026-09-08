@@ -49,7 +49,8 @@ defmodule Lightning.Adaptors.Strategy do
   `c:fetch_icons/1` — they are not stamped onto this record.
 
   `schema_data` is the credential schema as a JSON binary. `nil` means
-  the source sees no schema for this version.
+  the source sees no schema for this version; the Scheduler decides
+  whether that replaces a stored one.
   """
   @type adaptor_record :: %{
           required(:name) => String.t(),
