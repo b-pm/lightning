@@ -161,11 +161,11 @@ defmodule Lightning.Adaptors do
   Returns `{:error, term()}` unchanged from `Store.catalogue/1` on a
   backing-store failure; callers must handle it.
   """
-  @spec catalogue_with_stamp(atom()) ::
+  @spec catalogue(atom()) ::
           {:ok,
            {{DateTime.t() | nil, non_neg_integer()}, [Store.catalogue_entry()]}}
           | {:error, term()}
-  def catalogue_with_stamp(sup \\ Config.default_instance()) do
+  def catalogue(sup \\ Config.default_instance()) do
     Store.catalogue(sup)
   end
 

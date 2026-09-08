@@ -15,7 +15,7 @@ defmodule LightningWeb.AdaptorController do
   require Logger
 
   def index(conn, _params) do
-    case Adaptors.catalogue_with_stamp() do
+    case Adaptors.catalogue() do
       {:ok, {stamp, entries}} ->
         etag = etag_for(stamp)
 
