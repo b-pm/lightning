@@ -1,7 +1,7 @@
 ---
 name: create-plan
 description: Turn a feature request, issue file, or Linear ticket into a phased implementation plan that /implement-plan executes. The lead session steers and decides, cheap agents gather facts, and an independent reviewer checks the draft against the code before it is final. Usage /create-plan [issue path | Linear ID | one-line brief]
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Create plan
