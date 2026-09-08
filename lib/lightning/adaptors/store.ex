@@ -148,14 +148,14 @@ defmodule Lightning.Adaptors.Store do
   defp fetch_icon_bytes(strategy, source, name, shape, ext, expected_sha) do
     case strategy.fetch_icon(name, shape) do
       {:ok, %{data: bytes, ext: ^ext}} ->
-        if :crypto.hash(:sha256, bytes) == expected_sha do
-          {:ok, _sha} = IconCache.write!(source, name, shape, ext, bytes)
-          {:ignore, {:ok, IconCache.path(source, name, shape, ext)}}
-        else
-          {:ignore,
-           {:error,
-            {:icon_sha_mismatch,
-             expected: expected_sha, got: :crypto.hash(:sha256, bytes)}}}
+        case :crypto.hash(:sha256, bytes) do
+          ^expected_sha ->
+            {:ok, _sha} = IconCache.write!(source, name, shape, ext, bytes)
+            {:ignore, {:ok, IconCache.path(source, name, shape, ext)}}
+
+          got ->
+            {:ignore,
+             {:error, {:icon_sha_mismatch, expected: expected_sha, got: got}}}
         end
 
       {:ok, %{ext: other_ext}} ->

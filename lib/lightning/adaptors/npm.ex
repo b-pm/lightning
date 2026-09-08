@@ -83,11 +83,8 @@ defmodule Lightning.Adaptors.NPM do
     end
   end
 
-  # A transient schema-fetch failure must leave `schema_data`/`schema_sha256`
-  # absent from the record entirely, not merely `nil` — `Ecto.Changeset.cast/3`
-  # overwrites a column whenever its key is present in `attrs`, even with a
-  # nil value, so an absent key is the only way to signal "leave the
-  # previously-persisted schema untouched."
+  # Absent, not nil: `Ecto.Changeset.cast/3` overwrites a column for any
+  # present key, and `Strategy.adaptor_record/0` reserves nil for "no schema".
   defp put_schema(record, {nil, :fetch_failed}), do: record
 
   defp put_schema(record, {schema_data, schema_sha}) do
