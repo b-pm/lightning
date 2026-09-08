@@ -53,28 +53,6 @@ defmodule Lightning.Adaptors do
     One catalogue adaptor.
     """
 
-    defmodule Version do
-      @moduledoc """
-      One published version of a catalogue adaptor.
-      """
-
-      @type t :: %__MODULE__{
-              version: String.t(),
-              integrity: String.t() | nil,
-              size_bytes: integer() | nil,
-              published_at: DateTime.t() | nil,
-              deprecated: boolean()
-            }
-
-      defstruct [
-        :version,
-        :integrity,
-        :size_bytes,
-        :published_at,
-        deprecated: false
-      ]
-    end
-
     @type t :: %__MODULE__{
             name: String.t(),
             source: :npm | :local,
