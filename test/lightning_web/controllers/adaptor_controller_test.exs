@@ -4,9 +4,9 @@ defmodule LightningWeb.AdaptorControllerTest do
   import Lightning.Factories
   import Mimic
 
-  alias Lightning.AdaptorTestHelpers
+  alias Lightning.Adaptors
   alias Lightning.Adaptors.Catalogue
-  alias Lightning.Adaptors.Store
+  alias Lightning.AdaptorTestHelpers
   alias LightningWeb.AdaptorIconURL
 
   setup :verify_on_exit!
@@ -137,7 +137,7 @@ defmodule LightningWeb.AdaptorControllerTest do
   test "returns a 503 with a JSON body when the store fails", %{conn: conn} do
     conn = log_in_user(conn, insert(:user))
 
-    stub(Store, :catalogue, fn _sup -> {:error, :unavailable} end)
+    stub(Adaptors, :catalogue, fn -> {:error, :unavailable} end)
 
     conn = get(conn, ~p"/adaptors/catalogue")
 
