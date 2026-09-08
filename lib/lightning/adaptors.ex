@@ -208,22 +208,14 @@ defmodule Lightning.Adaptors do
         {:error, _} -> nil
       end
 
-    case cached || Catalogue.get_adaptor(name, source) do
+    case cached || Catalogue.get_package_meta(name, source) do
       nil -> nil
       meta -> to_package(meta, source)
     end
   end
 
-  defp to_package(meta, source) do
-    has_schema =
-      Map.get(meta, :has_schema, not is_nil(Map.get(meta, :schema_data)))
-
-    meta
-    |> Map.delete(:__struct__)
-    |> Map.put(:source, source)
-    |> Map.put(:has_schema, has_schema)
-    |> then(&struct(Package, &1))
-  end
+  defp to_package(meta, source),
+    do: struct!(Package, Map.put(meta, :source, source))
 
   @doc """
   Waits until the catalogue has loaded at least once, triggering the

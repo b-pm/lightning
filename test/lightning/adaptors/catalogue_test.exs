@@ -327,7 +327,7 @@ defmodule Lightning.Adaptors.CatalogueTest do
       assert meta.latest_version == "1.0.0"
       assert meta.description == "yep"
       assert meta.deprecated == false
-      assert %DateTime{} = meta.updated_at
+      assert meta.has_schema
 
       refute Map.has_key?(meta, :schema_data)
       refute Map.has_key?(meta, :homepage)
