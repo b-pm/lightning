@@ -143,7 +143,7 @@ defmodule Lightning.Adaptors do
   """
   @spec catalogue(atom()) ::
           {:ok,
-           {{DateTime.t() | nil, non_neg_integer()}, [Store.catalogue_entry()]}}
+           {{DateTime.t() | nil, non_neg_integer()}, [Store.rendered_entry()]}}
           | {:error, term()}
   def catalogue(sup \\ Config.default_instance()) do
     Store.catalogue(sup)

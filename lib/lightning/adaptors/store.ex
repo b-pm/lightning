@@ -37,7 +37,11 @@ defmodule Lightning.Adaptors.Store do
 
   @type package_meta :: Catalogue.package_meta()
 
-  @type catalogue_entry :: %{
+  @typedoc """
+  One `t:Lightning.Adaptors.Catalogue.catalogue_entry/0` with its icon
+  fields rendered to URLs, as the catalogue endpoint serves it.
+  """
+  @type rendered_entry :: %{
           name: String.t(),
           latest_version: String.t(),
           versions: [String.t()],
@@ -49,7 +53,7 @@ defmodule Lightning.Adaptors.Store do
         }
 
   @type catalogue ::
-          {{DateTime.t() | nil, non_neg_integer()}, [catalogue_entry()]}
+          {{DateTime.t() | nil, non_neg_integer()}, [rendered_entry()]}
 
   @doc """
   Returns the adaptor's credential schema as a JSON binary, not decoded.
@@ -278,7 +282,7 @@ defmodule Lightning.Adaptors.Store do
   end
 
   @spec render_entry(Catalogue.catalogue_entry(), Catalogue.source()) ::
-          catalogue_entry()
+          rendered_entry()
   defp render_entry(entry, source) do
     %{
       name: entry.name,
