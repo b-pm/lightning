@@ -6,7 +6,9 @@ defmodule Lightning.Adaptors.Store do
   catalogue table. `schema/2` and `versions/2` also fetch from the
   strategy when the row has no data yet and persist what they get; this
   only fills gaps on adaptors already in the catalogue, and an unknown
-  name returns `{:error, :not_found}`. `icon/3` returns a path on disk,
+  name returns `{:error, :not_found}`. A lazy fill broadcasts the change
+  like a scheduler write, so the cache refills from the row on the next
+  read rather than committing here. `icon/3` returns a path on disk,
   fetching the bytes from the strategy on the first miss. `catalogue/1`
   caches the picker payload already rendered, together with the ETag
   stamp that describes it.
@@ -300,7 +302,7 @@ defmodule Lightning.Adaptors.Store do
   # Lazy fetches only fill gaps on adaptors already in the catalogue;
   # they never add one.
   @spec fetch_and_persist(atom(), String.t(), :npm | :local, atom()) ::
-          {:commit, {:ok, term()}} | {:ignore, {:error, term()}}
+          {:ignore, {:ok, term()} | {:error, term()}}
   defp fetch_and_persist(sup, name, source, field) do
     if Catalogue.get_adaptor(name, source) do
       fetch_and_persist_known(sup, name, source, field)
@@ -315,12 +317,13 @@ defmodule Lightning.Adaptors.Store do
         record = Map.put(record, :source, source)
         {:ok, _} = Catalogue.upsert_adaptor(record)
 
-        # The strategy leaves a field off the record when its fetch failed
-        # transiently. Don't cache that as "no value"; let the next call retry.
-        case Map.fetch(record, field) do
-          {:ok, value} -> {:commit, {:ok, project_field(value, field)}}
-          :error -> {:ignore, {:ok, project_field(nil, field)}}
-        end
+        Phoenix.PubSub.broadcast(
+          Lightning.PubSub,
+          AdaptorsSupervisor.source_topic(sup),
+          {:changed, name, source}
+        )
+
+        {:ignore, {:ok, project_field(Map.get(record, field), field)}}
 
       {:ok, %{name: other}} ->
         {:ignore, {:error, {:name_mismatch, other}}}
@@ -330,7 +333,7 @@ defmodule Lightning.Adaptors.Store do
     end
   end
 
-  # Both cache paths must store the same projected shape.
+  # The value handed back here must match what a DB-backed read caches.
   defp project_field(rows, :versions) when is_list(rows),
     do: project_versions(rows)
 
