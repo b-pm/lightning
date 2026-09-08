@@ -14,29 +14,6 @@ defmodule Lightning.AdaptorsTest do
   setup :verify_on_exit!
   setup :isolated_adaptors
 
-  defp adaptor_record(overrides \\ []) do
-    overrides = Map.new(overrides)
-
-    %{
-      name: "@openfn/language-http",
-      source: :npm,
-      latest_version: "1.0.0",
-      description: "HTTP adaptor",
-      homepage: nil,
-      repository: nil,
-      license: "LGPL-3.0",
-      deprecated: false,
-      schema_data: nil,
-      schema_sha256: nil,
-      icon_square_ext: nil,
-      icon_rectangle_ext: nil,
-      icon_square_sha256: nil,
-      icon_rectangle_sha256: nil,
-      versions: [version_record("1.0.0")]
-    }
-    |> Map.merge(overrides)
-  end
-
   defp version_record(version) do
     %{
       version: version,
