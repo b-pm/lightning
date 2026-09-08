@@ -218,6 +218,21 @@ defmodule Lightning.Adaptors.SchedulerTest do
       {:global, gname} = sched_name
       assert is_pid(:global.whereis_name(gname))
     end
+
+    test "a Postgrex.Error reading max_checked_at is not rescued and crashes the scheduler",
+         %{sup: sup} do
+      pid =
+        start_scheduler(sup,
+          checked_at: fn _source ->
+            raise Postgrex.Error, message: "undefined_column"
+          end
+        )
+
+      ref = Process.monitor(pid)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, reason}, 2000
+      assert {%Postgrex.Error{}, _stacktrace} = reason
+    end
   end
 
   describe "do_refresh/1 diff logic" do

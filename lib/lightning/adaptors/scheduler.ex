@@ -155,7 +155,7 @@ defmodule Lightning.Adaptors.Scheduler do
   defp first_tick_delay(state) do
     time_until_next_ms(state.checked_at.(state.source), state.interval_ms)
   rescue
-    e in [DBConnection.ConnectionError, Postgrex.Error] ->
+    e in DBConnection.ConnectionError ->
       Logger.warning(
         "Adaptors[#{state.source}]: scheduler could not read max_checked_at, " <>
           "ticking immediately: #{Exception.message(e)}"
