@@ -2778,7 +2778,7 @@ defmodule LightningWeb.CredentialLiveTest do
 
       assert Floki.find(
                html_tree,
-               "label[for='credential-schema-picker_selected_http']"
+               "label[for='credential-schema-picker_selected_@openfn/language-http']"
              ) != []
 
       assert Floki.find(

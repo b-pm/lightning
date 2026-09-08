@@ -85,6 +85,47 @@ defmodule Lightning.Adaptors.CatalogueTest do
     end
   end
 
+  describe "upsert_adaptor/1 — schema preservation on transient fetch failure" do
+    test "transient failure keeps the old schema" do
+      {:ok, first} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(
+            schema_data: %{"type" => "object"},
+            schema_sha256: "abc"
+          )
+        )
+
+      {:ok, second} =
+        Catalogue.upsert_adaptor(
+          adaptor_record()
+          |> Map.drop([:schema_data, :schema_sha256])
+        )
+
+      assert second.id == first.id
+      assert second.schema_data == first.schema_data
+      assert second.schema_sha256 == first.schema_sha256
+    end
+
+    test "genuinely removed schema does clear" do
+      {:ok, first} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(
+            schema_data: %{"type" => "object"},
+            schema_sha256: "abc"
+          )
+        )
+
+      {:ok, second} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(schema_data: nil, schema_sha256: nil)
+        )
+
+      assert second.id == first.id
+      assert second.schema_data == nil
+      assert second.schema_sha256 == nil
+    end
+  end
+
   describe "upsert_adaptor/1 — diff-aware :updated_at" do
     test "changing :latest_version bumps :updated_at" do
       {:ok, first} = Catalogue.upsert_adaptor(adaptor_record())
@@ -301,6 +342,27 @@ defmodule Lightning.Adaptors.CatalogueTest do
 
       assert [%{name: "@openfn/language-http"}] =
                Catalogue.list_package_metas(:local)
+    end
+
+    test "has_schema reflects whether schema_data is set" do
+      {:ok, _} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(
+            name: "@openfn/language-with-schema",
+            schema_data: %{"type" => "object"}
+          )
+        )
+
+      {:ok, _} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(name: "@openfn/language-no-schema", schema_data: nil)
+        )
+
+      metas = Catalogue.list_package_metas(:npm)
+
+      assert Enum.find(metas, &(&1.name == "@openfn/language-with-schema")).has_schema
+
+      refute Enum.find(metas, &(&1.name == "@openfn/language-no-schema")).has_schema
     end
 
     test "omits the excluded adaptors" do

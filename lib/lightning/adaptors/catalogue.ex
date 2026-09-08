@@ -28,7 +28,8 @@ defmodule Lightning.Adaptors.Catalogue do
           icon_square_ext: String.t() | nil,
           icon_rectangle_ext: String.t() | nil,
           icon_square_sha256: binary() | nil,
-          icon_rectangle_sha256: binary() | nil
+          icon_rectangle_sha256: binary() | nil,
+          has_schema: boolean()
         }
 
   @type catalogue_entry :: %{
@@ -74,7 +75,8 @@ defmodule Lightning.Adaptors.Catalogue do
           icon_square_ext: a.icon_square_ext,
           icon_rectangle_ext: a.icon_rectangle_ext,
           icon_square_sha256: a.icon_square_sha256,
-          icon_rectangle_sha256: a.icon_rectangle_sha256
+          icon_rectangle_sha256: a.icon_rectangle_sha256,
+          has_schema: not is_nil(a.schema_data)
         }
     )
   end

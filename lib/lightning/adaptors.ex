@@ -84,7 +84,8 @@ defmodule Lightning.Adaptors do
             icon_square_ext: String.t() | nil,
             icon_rectangle_ext: String.t() | nil,
             icon_square_sha256: binary() | nil,
-            icon_rectangle_sha256: binary() | nil
+            icon_rectangle_sha256: binary() | nil,
+            has_schema: boolean()
           }
 
     defstruct [
@@ -96,6 +97,7 @@ defmodule Lightning.Adaptors do
       :icon_rectangle_ext,
       :icon_square_sha256,
       :icon_rectangle_sha256,
+      :has_schema,
       deprecated: false
     ]
   end
@@ -115,7 +117,8 @@ defmodule Lightning.Adaptors do
   Returns the credential schema of the adaptor named `pkg`, as a JSON
   binary.
   """
-  @spec schema(atom(), String.t()) :: {:ok, String.t()} | {:error, term()}
+  @spec schema(atom(), String.t()) ::
+          {:ok, String.t() | nil} | {:error, term()}
   def schema(sup \\ Config.default_instance(), pkg), do: Store.schema(sup, pkg)
 
   @doc """
@@ -234,7 +237,14 @@ defmodule Lightning.Adaptors do
   end
 
   defp to_package(meta, source) do
-    struct(Package, meta |> Map.delete(:__struct__) |> Map.put(:source, source))
+    has_schema =
+      Map.get(meta, :has_schema, not is_nil(Map.get(meta, :schema_data)))
+
+    meta
+    |> Map.delete(:__struct__)
+    |> Map.put(:source, source)
+    |> Map.put(:has_schema, has_schema)
+    |> then(&struct(Package, &1))
   end
 
   @doc """
