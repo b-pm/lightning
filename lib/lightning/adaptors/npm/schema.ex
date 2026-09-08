@@ -30,10 +30,8 @@ defmodule Lightning.Adaptors.NPM.Schema do
   @spec schema(String.t(), String.t()) ::
           {:ok, {String.t(), String.t()}} | {:ok, {nil, nil}} | {:error, term()}
   def schema(name, version) do
-    with {:ok, body} <- fetch_schema_bytes(name, version),
-         {:ok, _} <- Jason.decode(body) do
-      sha = :sha256 |> :crypto.hash(body) |> Base.encode16(case: :lower)
-      {:ok, {body, sha}}
+    with {:ok, body} <- fetch_schema_bytes(name, version) do
+      Lightning.Adaptors.Strategy.digest_schema(body)
     else
       {:error, {:http_status, 404}} -> {:ok, {nil, nil}}
       {:error, reason} -> {:error, reason}
