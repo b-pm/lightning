@@ -312,11 +312,7 @@ defmodule Lightning.Adaptors.Store do
   defp fetch_and_persist_known(sup, name, source, field) do
     case AdaptorsSupervisor.strategy(sup).fetch_adaptor(name) do
       {:ok, %{name: ^name} = record} ->
-        record =
-          record
-          |> Map.put(:source, source)
-          |> normalize_schema_data()
-
+        record = Map.put(record, :source, source)
         {:ok, _} = Catalogue.upsert_adaptor(record)
 
         # The strategy leaves a field off the record when its fetch failed
@@ -340,16 +336,6 @@ defmodule Lightning.Adaptors.Store do
 
   defp project_field(nil, :schema_data), do: "{}"
   defp project_field(value, _field), do: value
-
-  # The real strategies already encode schema_data to a JSON binary, but
-  # a strategy is still free to hand back a map, so normalize here to
-  # keep the cached value consistent with what a DB-backed read returns.
-  defp normalize_schema_data(%{schema_data: data} = record)
-       when is_map(data) and not is_struct(data) do
-    %{record | schema_data: Jason.encode!(data)}
-  end
-
-  defp normalize_schema_data(record), do: record
 
   @spec project_icon_meta(map()) :: icon_meta()
   defp project_icon_meta(adaptor) do
