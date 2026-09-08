@@ -42,9 +42,9 @@ defmodule Lightning.Adaptors.PackageName do
   @doc """
   Renders a spec for the worker.
 
-  `opts[:source]` of `:local` forces `name@local`. `opts[:latest]` is the
-  concrete version for a `latest` spec, and is required for one under
-  any other source. A `name@local` spec is always kept as is.
+  `opts[:source]` of `:local` forces `name@local`. Otherwise, a `latest`
+  spec is resolved to `opts[:latest]`, which must be given in that case.
+  A `name@local` spec is always kept as is.
   """
   @spec to_wire(String.t() | nil, keyword()) :: String.t()
   def to_wire(adaptor, opts \\ []) do

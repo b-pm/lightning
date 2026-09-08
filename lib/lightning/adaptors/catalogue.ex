@@ -53,8 +53,8 @@ defmodule Lightning.Adaptors.Catalogue do
                      @openfn/language-collections)
 
   @doc """
-  Picker-facing lean projection for a source. Avoids the heavy JSONB
-  columns (`schema_data`, `dependencies`, `peer_dependencies`).
+  Picker-facing lean projection for a source. Avoids the heavy
+  `schema_data` JSONB column and skips the version join entirely.
 
   Excludes the packages listed in `@excluded_names` and any deprecated
   adaptor.
@@ -78,8 +78,9 @@ defmodule Lightning.Adaptors.Catalogue do
   end
 
   @doc """
-  Full structs for a source. Rare — used by debug tools and admin
-  views. Picker traffic goes through `list_package_metas/1`.
+  Full structs for a source. Heavier than `list_package_metas/1`, which is
+  what picker traffic uses — this one is for callers that need the whole
+  row, like the Scheduler's diffing and the dump/seed tooling.
   """
   @spec list_adaptors(source()) :: [Adaptor.t()]
   def list_adaptors(source) do

@@ -6,8 +6,6 @@ defmodule Lightning.Adaptors.NPMTest do
   @package "@openfn/language-http"
   @latest_version "2.1.0"
 
-  # One Bypass server each for the npm registry, jsDelivr, and
-  # raw.githubusercontent.com; each URL is installed onto the strategy_opts block.
   setup do
     registry = Bypass.open()
     jsdelivr = Bypass.open()

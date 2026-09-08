@@ -43,11 +43,11 @@ Schema modules and `changeset/2` are a seam too, but a shallow one — prefer te
 
 ## Mocking
 
-There is no repo guideline for this, so: Mox is the default and by a wide margin the house style (89 test files use it, against 12 for Mimic and 11 for `:mock`).
+There is no repo guideline for this, so: Mox is the default and by a wide margin the house style. Grep `test/` for `Mox`, `Mimic` and `with_mock` to see the current split.
 
 - **Mox** for collaborators behind a behaviour that gets injected — HTTP via `Tesla.Adapter`, the extension hooks, `Lightning.Config`. Mocks are declared once in `test/test_helper.exs`; add new ones there. Stays `async: true`.
 - **Mimic** only when the collaborator genuinely can't be injected: `File`, `IO`, `:hackney` are already `Mimic.copy`'d in `test/test_helper.exs`.
-- **`:mock`'s `with_mock`** — don't add new uses. It swaps the module globally, which is why 10 of the 11 files using it run `async: false`.
+- **`:mock`'s `with_mock`** — don't add new uses. It swaps the module globally, so almost every file using it runs `async: false`.
 - **Bypass** for a real HTTP server when you're testing the request that goes out on the wire (`test/support/bypass_helpers.ex`).
 - **Stub modules** over expectation-based mocks when you only need a canned answer and don't care that the call happened: see `test/support/stub_rate_limiter.ex` and `stub_usage_limiter.ex`.
 

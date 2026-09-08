@@ -20,7 +20,7 @@ defmodule Lightning.Adaptors.NPM do
       against `raw.githubusercontent.com`, used by the Store's rare
       lazy-miss fallback.
     * `c:Lightning.Adaptors.Strategy.fetch_icons/1` — bulk fan-out over
-      the search listing, one HTTP request per `(name, shape)`. Threads
+      the adaptor listing, one HTTP request per `(name, shape)`. Threads
       `:prior_etags` from the caller down into the per-request
       `If-None-Match` headers.
 
@@ -40,18 +40,19 @@ defmodule Lightning.Adaptors.NPM do
   transient failures (5xx, timeout, nxdomain) of the *primary* request
   (`packument` for `fetch_adaptor/1`, the org package listing for
   `list_adaptors/0` and `fetch_icons/1`) surface as `{:error, term()}`
-  unchanged. Schema and
-  icon fetches inside `fetch_adaptor/1` and `fetch_icons/1` are
-  best-effort: a single icon miss degrades that entry to absence rather
-  than failing the whole record.
+  unchanged. The schema fetch inside `fetch_adaptor/1` and each icon
+  fetch inside `fetch_icons/1` are best-effort instead: a miss there
+  degrades to a nil schema or an absent icon shape, rather than failing
+  the whole record or batch.
 
   ## Configuration
 
   Each sub-module reads `:registry_url`, `:jsdelivr_url`, `:github_url`,
   `:github_ref`, and `:http_timeout` via
-  `Lightning.Adaptors.Config.strategy_opts(__MODULE__)`, with defaults
-  baked in so the module works even when no Application env block is
-  set.
+  `Lightning.Adaptors.Config.strategy_opts(Lightning.Adaptors.NPM)` — all
+  three share this module's own config key rather than each having their
+  own — with defaults baked in so the module works even when no
+  Application env block is set.
   """
 
   @behaviour Lightning.Adaptors.Strategy

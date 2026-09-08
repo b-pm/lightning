@@ -42,7 +42,7 @@ gets an explicit `model:` on every dispatch.
   it explains why, it does not describe what is there now. Never copy an older
   plan's approach without re-verifying against the code.
 
-### 2. Work the question frontier
+### 2. Resolve open questions
 
 - **Facts are your job.** Never ask the user something an agent can look up.
 - Present every open **decision** at once, numbered, each with your
