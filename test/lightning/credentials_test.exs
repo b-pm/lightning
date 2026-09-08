@@ -2890,7 +2890,7 @@ defmodule Lightning.CredentialsTest do
 
       cache = Lightning.Adaptors.Supervisor.cache_name(sup)
       source = Lightning.Adaptors.Supervisor.source(sup)
-      Cachex.put(cache, {:schema, name, source}, {:ok, nil})
+      Cachex.put(cache, {:schema, name, source}, {:ok, "{}"})
 
       assert %Credentials.Schema{name: ^name, fields: []} =
                Credentials.get_schema(name)

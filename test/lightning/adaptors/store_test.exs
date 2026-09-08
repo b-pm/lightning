@@ -93,7 +93,7 @@ defmodule Lightning.Adaptors.StoreTest do
                Cachex.get(cache, {:schema, "@openfn/language-http", source})
     end
 
-    test "a failed schema fetch returns nil without caching it",
+    test "a failed schema fetch returns an empty schema without caching it",
          %{sup: sup, cache: cache} do
       source = AdaptorsSupervisor.source(sup)
       name = "@openfn/language-http"
@@ -104,7 +104,7 @@ defmodule Lightning.Adaptors.StoreTest do
         {:ok, adaptor_record() |> Map.drop([:schema_data, :schema_sha256])}
       end)
 
-      assert {:ok, nil} = Store.schema(sup, name)
+      assert {:ok, "{}"} = Store.schema(sup, name)
       assert {:ok, nil} = Cachex.get(cache, {:schema, name, source})
     end
 

@@ -590,14 +590,6 @@ defmodule Lightning.Credentials do
     resolved = Lightning.Adaptors.resolve_name(schema_name)
 
     case Lightning.Adaptors.schema(resolved) do
-      {:ok, nil} ->
-        # Adaptor.schema_data may be nil even for an adaptor the caller
-        # already resolved to a known name (the picker excludes these, but
-        # a job's adaptor selection can still reach here directly). An
-        # empty schema imposes no constraints, so the credential body is
-        # accepted as-is instead of Schema.new/2 raising on a nil body.
-        Credentials.Schema.new(%{}, resolved)
-
       {:ok, schema_body} ->
         Credentials.Schema.new(schema_body, resolved)
 

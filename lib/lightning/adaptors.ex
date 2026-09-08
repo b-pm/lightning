@@ -93,10 +93,9 @@ defmodule Lightning.Adaptors do
 
   @doc """
   Returns the credential schema of the adaptor named `pkg`, as a JSON
-  binary.
+  binary. An adaptor with no schema yields `"{}"`.
   """
-  @spec schema(atom(), String.t()) ::
-          {:ok, String.t() | nil} | {:error, term()}
+  @spec schema(atom(), String.t()) :: {:ok, String.t()} | {:error, term()}
   def schema(sup \\ Config.default_instance(), pkg), do: Store.schema(sup, pkg)
 
   @doc """

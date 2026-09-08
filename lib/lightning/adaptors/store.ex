@@ -53,9 +53,9 @@ defmodule Lightning.Adaptors.Store do
 
   @doc """
   Returns the adaptor's credential schema as a JSON binary, not decoded.
+  An adaptor with no schema yields `"{}"`.
   """
-  @spec schema(sup(), String.t()) ::
-          {:ok, String.t() | nil} | {:error, term()}
+  @spec schema(sup(), String.t()) :: {:ok, String.t()} | {:error, term()}
   def schema(sup, name) do
     cache = AdaptorsSupervisor.cache_name(sup)
     source = AdaptorsSupervisor.source(sup)
@@ -319,7 +319,7 @@ defmodule Lightning.Adaptors.Store do
         # transiently. Don't cache that as "no value"; let the next call retry.
         case Map.fetch(record, field) do
           {:ok, value} -> {:commit, {:ok, project_field(value, field)}}
-          :error -> {:ignore, {:ok, nil}}
+          :error -> {:ignore, {:ok, project_field(nil, field)}}
         end
 
       {:ok, %{name: other}} ->
@@ -334,6 +334,7 @@ defmodule Lightning.Adaptors.Store do
   defp project_field(rows, :versions) when is_list(rows),
     do: project_versions(rows)
 
+  defp project_field(nil, :schema_data), do: "{}"
   defp project_field(value, _field), do: value
 
   # The real strategies already encode schema_data to a JSON binary, but
