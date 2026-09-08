@@ -111,7 +111,7 @@ defmodule Lightning.Adaptors.StoreTest do
         {:ok, adaptor_record() |> Map.drop([:schema_data, :schema_sha256])}
       end)
 
-      assert {:error, :unavailable} = Store.schema(sup, name)
+      assert {:error, :fetch_failed} = Store.schema(sup, name)
       assert {:ok, nil} = Cachex.get(cache, {:schema, name, source})
     end
 
