@@ -32,8 +32,9 @@ and this project adheres to
   adaptors and deprecated versions no longer appear as new choices in the
   credential type picker or the job adaptor picker, though jobs and credentials
   that already reference one keep working unchanged. An adaptor with no
-  configuration schema no longer appears as a choice either, closing a crash
-  that could occur when selecting one. See [ADAPTORS.md](ADAPTORS.md).
+  configuration schema is not offered as a credential type, since there would be
+  nothing to configure, and one that is reached anyway gets an empty schema
+  instead of crashing. See [ADAPTORS.md](ADAPTORS.md).
   [#4801](https://github.com/OpenFn/lightning/pull/4801)
 
 ### Fixed
