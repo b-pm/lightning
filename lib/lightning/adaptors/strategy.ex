@@ -49,8 +49,7 @@ defmodule Lightning.Adaptors.Strategy do
   `c:fetch_icons/1` — they are not stamped onto this record.
 
   `schema_data` is the credential schema as a JSON binary. `nil` means
-  the adaptor has no schema; leaving the key off means the schema fetch
-  failed transiently and the caller should keep what it already has.
+  the source sees no schema for this version.
   """
   @type adaptor_record :: %{
           required(:name) => String.t(),
@@ -60,8 +59,8 @@ defmodule Lightning.Adaptors.Strategy do
           required(:license) => String.t() | nil,
           required(:latest_version) => String.t(),
           required(:deprecated) => boolean(),
-          optional(:schema_data) => String.t() | nil,
-          optional(:schema_sha256) => String.t() | nil,
+          required(:schema_data) => String.t() | nil,
+          required(:schema_sha256) => String.t() | nil,
           required(:versions) => [version_record()]
         }
 

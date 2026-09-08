@@ -328,15 +328,13 @@ defmodule Lightning.Adaptors.LocalTest do
       assert record.schema_sha256 == nil
     end
 
-    test "leaves the schema fields off the record when the file cannot be read",
+    test "fails the whole record when the schema file cannot be read",
          %{root: root} do
       dir = write_package!(root, "locked", "@openfn/language-locked", "1.0.0")
       File.mkdir!(Path.join(dir, "configuration-schema.json"))
 
-      {:ok, record} = Local.fetch_adaptor("@openfn/language-locked")
-
-      refute Map.has_key?(record, :schema_data)
-      refute Map.has_key?(record, :schema_sha256)
+      assert {:error, {:schema_fetch_failed, _reason}} =
+               Local.fetch_adaptor("@openfn/language-locked")
     end
 
     test "handles a plain-string repository field", %{root: root} do

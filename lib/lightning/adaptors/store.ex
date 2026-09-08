@@ -8,7 +8,7 @@ defmodule Lightning.Adaptors.Store do
   only fills gaps on adaptors already in the catalogue, and an unknown
   name returns `{:error, :not_found}`. A lazy fill that lands a value
   broadcasts the change like a scheduler write; one whose fetch failed
-  returns `{:error, :fetch_failed}`. `icon/3` returns a path on disk,
+  passes the strategy's error through. `icon/3` returns a path on disk,
   fetching the bytes from the strategy on the first miss. `catalogue/1`
   caches the picker payload already rendered, together with the ETag
   stamp that describes it.
@@ -322,11 +322,6 @@ defmodule Lightning.Adaptors.Store do
             )
 
             {:ignore, {:ok, project_field(value, field)}}
-
-          # Left off the record: the fetch failed transiently. Say so rather
-          # than hand back an empty schema that would validate anything.
-          :error ->
-            {:ignore, {:error, :fetch_failed}}
         end
 
       {:ok, %{name: other}} ->

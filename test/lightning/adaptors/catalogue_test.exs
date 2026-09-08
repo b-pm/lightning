@@ -85,27 +85,7 @@ defmodule Lightning.Adaptors.CatalogueTest do
     end
   end
 
-  describe "upsert_adaptor/1 — schema preservation on transient fetch failure" do
-    test "transient failure keeps the old schema" do
-      {:ok, first} =
-        Catalogue.upsert_adaptor(
-          adaptor_record(
-            schema_data: %{"type" => "object"},
-            schema_sha256: "abc"
-          )
-        )
-
-      {:ok, second} =
-        Catalogue.upsert_adaptor(
-          adaptor_record()
-          |> Map.drop([:schema_data, :schema_sha256])
-        )
-
-      assert second.id == first.id
-      assert second.schema_data == first.schema_data
-      assert second.schema_sha256 == first.schema_sha256
-    end
-
+  describe "upsert_adaptor/1 — schema clearing" do
     test "genuinely removed schema does clear" do
       {:ok, first} =
         Catalogue.upsert_adaptor(

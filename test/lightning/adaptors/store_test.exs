@@ -100,21 +100,6 @@ defmodule Lightning.Adaptors.StoreTest do
                Cachex.get(cache, {:schema, "@openfn/language-http", source})
     end
 
-    test "a failed schema fetch returns an error without caching it",
-         %{sup: sup, cache: cache} do
-      source = AdaptorsSupervisor.source(sup)
-      name = "@openfn/language-http"
-
-      {:ok, _} = Catalogue.upsert_adaptor(adaptor_record(schema_data: nil))
-
-      expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, 1, fn ^name ->
-        {:ok, adaptor_record() |> Map.drop([:schema_data, :schema_sha256])}
-      end)
-
-      assert {:error, :fetch_failed} = Store.schema(sup, name)
-      assert {:ok, nil} = Cachex.get(cache, {:schema, name, source})
-    end
-
     test "an adaptor the source confirms has no schema caches an empty one",
          %{sup: sup, cache: cache} do
       source = AdaptorsSupervisor.source(sup)

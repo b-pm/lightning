@@ -95,7 +95,7 @@ defmodule Lightning.Adaptors do
   Returns the credential schema of the adaptor named `pkg`, as a JSON
   binary. An adaptor with no schema yields `"{}"`; an unknown name is
   `{:error, :not_found}` and a schema the source could not be reached
-  for is `{:error, :fetch_failed}`.
+  for is the strategy's own `{:error, reason}`.
   """
   @spec schema(atom(), String.t()) :: {:ok, String.t()} | {:error, term()}
   def schema(sup \\ Config.default_instance(), pkg), do: Store.schema(sup, pkg)

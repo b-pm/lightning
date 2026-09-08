@@ -340,6 +340,40 @@ defmodule Lightning.Adaptors.SchedulerTest do
       assert Catalogue.get_adaptor("@openfn/language-new", source) != nil
     end
 
+    test "a failed fetch persists nothing, and the next tick retries", %{
+      sup: sup
+    } do
+      test_pid = self()
+      source = AdaptorsSupervisor.source(sup)
+      source_topic = AdaptorsSupervisor.source_topic(sup)
+      name = "@openfn/language-new"
+
+      expect(Lightning.Adaptors.StrategyMock, :list_adaptors, 2, fn ->
+        {:ok, [%{name: name, latest_version: "1.0.0"}]}
+      end)
+
+      expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, 1, fn ^name ->
+        send(test_pid, :first_fetch)
+        {:error, {:schema_fetch_failed, :timeout}}
+      end)
+
+      :ok = Phoenix.PubSub.subscribe(Lightning.PubSub, source_topic)
+      start_scheduler(sup)
+
+      assert_receive :first_fetch, 2000
+      refute_receive {:changed, _, _}, 200
+      assert Catalogue.get_adaptor(name, source) == nil
+
+      expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, 1, fn ^name ->
+        {:ok, adaptor_record(name: name)}
+      end)
+
+      Scheduler.refresh_now(AdaptorsSupervisor.global_scheduler_name(sup))
+
+      assert_receive {:changed, ^name, ^source}, 2000
+      assert Catalogue.get_adaptor(name, source) != nil
+    end
+
     test "list_adaptors error: no DB writes, no broadcasts", %{sup: sup} do
       test_pid = self()
       source_topic = AdaptorsSupervisor.source_topic(sup)
