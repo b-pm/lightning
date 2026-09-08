@@ -2766,6 +2766,8 @@ defmodule LightningWeb.CredentialLiveTest do
         schema_data: ~s({"type":"object"})
       )
 
+      Lightning.AdaptorTestHelpers.prime_packages_cache()
+
       {:ok, view, _html} = live(conn, ~p"/credentials")
 
       html = open_create_credential_modal(view)
@@ -2784,6 +2786,8 @@ defmodule LightningWeb.CredentialLiveTest do
 
     test "omits an adaptor with no configuration schema", %{conn: conn} do
       insert(:adaptor, name: "@openfn/language-no-schema", schema_data: nil)
+
+      Lightning.AdaptorTestHelpers.prime_packages_cache()
 
       {:ok, view, _html} = live(conn, ~p"/credentials")
 

@@ -224,6 +224,21 @@ defmodule Lightning.AdaptorTestHelpers do
       path |> Path.basename(".json") |> seed_credential_schema()
     end)
 
+    prime_packages_cache()
+
+    :ok
+  end
+
+  @doc """
+  Fills the `{:packages, source}` cache entry from whatever adaptor rows
+  currently exist. Call this after inserting an adaptor row so the picker
+  sees it, since `Config.default_instance/0`'s cache fills otherwise run in
+  a Courier process that can't see the SQL sandbox connection.
+  """
+  @spec prime_packages_cache() :: :ok
+  def prime_packages_cache do
+    ensure_isolated!()
+
     source = AdaptorsSupervisor.source(Config.default_instance())
     metas = Lightning.Adaptors.Catalogue.list_package_metas(source)
 
