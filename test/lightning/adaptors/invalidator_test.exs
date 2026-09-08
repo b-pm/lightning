@@ -25,7 +25,7 @@ defmodule Lightning.Adaptors.InvalidatorTest do
   end
 
   describe "handle_info/2 - {:changed, name, source}" do
-    test "evicts all seven matching cache keys on broadcast", %{
+    test "evicts all six matching cache keys on broadcast", %{
       sup: sup,
       cache: cache,
       inv_name: inv_name
@@ -35,7 +35,6 @@ defmodule Lightning.Adaptors.InvalidatorTest do
       name = "@openfn/language-http"
 
       Cachex.put!(cache, {:schema, name, source}, {:ok, %{"type" => "object"}})
-      Cachex.put!(cache, {:versions, name, source}, {:ok, [%{version: "1.0.0"}]})
 
       Cachex.put!(
         cache,
@@ -63,7 +62,6 @@ defmodule Lightning.Adaptors.InvalidatorTest do
       :sys.get_state(inv_name)
 
       assert {:ok, nil} = Cachex.get(cache, {:schema, name, source})
-      assert {:ok, nil} = Cachex.get(cache, {:versions, name, source})
       assert {:ok, nil} = Cachex.get(cache, {:icon_meta, name, source})
       assert {:ok, nil} = Cachex.get(cache, {:icon_bytes, source, name, :square})
 
@@ -91,7 +89,6 @@ defmodule Lightning.Adaptors.InvalidatorTest do
         {:ok, %{"type" => "object"}}
       )
 
-      Cachex.put!(cache, {:versions, bystander, source}, {:ok, []})
       Cachex.put!(cache, {:icon_meta, bystander, source}, {:ok, %{}})
 
       Phoenix.PubSub.broadcast!(
@@ -103,7 +100,6 @@ defmodule Lightning.Adaptors.InvalidatorTest do
       :sys.get_state(inv_name)
 
       assert {:ok, {:ok, _}} = Cachex.get(cache, {:schema, bystander, source})
-      assert {:ok, {:ok, _}} = Cachex.get(cache, {:versions, bystander, source})
       assert {:ok, {:ok, _}} = Cachex.get(cache, {:icon_meta, bystander, source})
     end
 
