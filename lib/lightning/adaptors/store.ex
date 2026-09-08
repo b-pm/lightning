@@ -6,9 +6,9 @@ defmodule Lightning.Adaptors.Store do
   catalogue table. `schema/2` and `versions/2` also fetch from the
   strategy when the row has no data yet and persist what they get; this
   only fills gaps on adaptors already in the catalogue, and an unknown
-  name returns `{:error, :not_found}`. A lazy fill broadcasts the change
-  like a scheduler write, so the cache refills from the row on the next
-  read rather than committing here. `icon/3` returns a path on disk,
+  name returns `{:error, :not_found}`. A lazy fill that lands a value
+  broadcasts the change like a scheduler write; one whose fetch failed
+  returns `{:error, :unavailable}`. `icon/3` returns a path on disk,
   fetching the bytes from the strategy on the first miss. `catalogue/1`
   caches the picker payload already rendered, together with the ETag
   stamp that describes it.
@@ -302,7 +302,7 @@ defmodule Lightning.Adaptors.Store do
   # Lazy fetches only fill gaps on adaptors already in the catalogue;
   # they never add one.
   @spec fetch_and_persist(atom(), String.t(), :npm | :local, atom()) ::
-          {:ignore, {:ok, term()} | {:error, term()}}
+          {:commit, {:ok, term()}} | {:ignore, {:ok, term()} | {:error, term()}}
   defp fetch_and_persist(sup, name, source, field) do
     if Catalogue.get_adaptor(name, source) do
       fetch_and_persist_known(sup, name, source, field)
@@ -317,13 +317,28 @@ defmodule Lightning.Adaptors.Store do
         record = Map.put(record, :source, source)
         {:ok, _} = Catalogue.upsert_adaptor(record)
 
-        Phoenix.PubSub.broadcast(
-          Lightning.PubSub,
-          AdaptorsSupervisor.source_topic(sup),
-          {:changed, name, source}
-        )
+        case Map.fetch(record, field) do
+          # The source has nothing; cache that so the next read stays local.
+          {:ok, nil} ->
+            {:commit, {:ok, project_field(nil, field)}}
 
-        {:ignore, {:ok, project_field(Map.get(record, field), field)}}
+          # Landed a value: announce it like a scheduler write. The
+          # Invalidator drops the stale keys and the next read refills them
+          # from the row, so there is nothing to commit here.
+          {:ok, value} ->
+            Phoenix.PubSub.broadcast(
+              Lightning.PubSub,
+              AdaptorsSupervisor.source_topic(sup),
+              {:changed, name, source}
+            )
+
+            {:ignore, {:ok, project_field(value, field)}}
+
+          # Left off the record: the fetch failed transiently. Say so rather
+          # than hand back an empty schema that would validate anything.
+          :error ->
+            {:ignore, {:error, :unavailable}}
+        end
 
       {:ok, %{name: other}} ->
         {:ignore, {:error, {:name_mismatch, other}}}
