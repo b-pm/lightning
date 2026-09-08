@@ -314,7 +314,13 @@ defmodule Lightning.Adaptors.Store do
           |> normalize_schema_data()
 
         {:ok, _} = Catalogue.upsert_adaptor(record)
-        {:commit, {:ok, record |> Map.get(field) |> project_field(field)}}
+
+        # The strategy leaves a field off the record when its fetch failed
+        # transiently. Don't cache that as "no value"; let the next call retry.
+        case Map.fetch(record, field) do
+          {:ok, value} -> {:commit, {:ok, project_field(value, field)}}
+          :error -> {:ignore, {:ok, nil}}
+        end
 
       {:ok, %{name: other}} ->
         {:ignore, {:error, {:name_mismatch, other}}}
