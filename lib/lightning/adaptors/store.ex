@@ -120,7 +120,7 @@ defmodule Lightning.Adaptors.Store do
     with {:ok, meta} <- icon_meta(sup, name),
          {:ok, ext} <- ext_for_shape(meta, shape),
          {:ok, expected_sha} <- sha256_for_shape(meta, shape) do
-      if disk_cache_matches?(source, name, shape, ext, expected_sha) do
+      if IconCache.cached?(source, name, shape, ext, expected_sha) do
         {:ok, IconCache.path(source, name, shape, ext)}
       else
         cache
@@ -133,17 +133,6 @@ defmodule Lightning.Adaptors.Store do
         )
         |> unwrap()
       end
-    end
-  end
-
-  # A cached file existing proves nothing about its content — a node that
-  # cached an earlier version of this icon keeps that file forever
-  # otherwise. A sha mismatch, or the file being absent, are both treated
-  # as a miss so the fetch branch below re-pulls and overwrites it.
-  defp disk_cache_matches?(source, name, shape, ext, expected_sha) do
-    case source |> IconCache.path(name, shape, ext) |> File.read() do
-      {:ok, bytes} -> :crypto.hash(:sha256, bytes) == expected_sha
-      {:error, _} -> false
     end
   end
 
