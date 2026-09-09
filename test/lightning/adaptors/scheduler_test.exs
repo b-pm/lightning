@@ -342,6 +342,49 @@ defmodule Lightning.Adaptors.SchedulerTest do
       assert row.updated_at == existing.updated_at
     end
 
+    test "matching version, no stored schema, row older than the grace window: touch only",
+         %{sup: sup} do
+      source = AdaptorsSupervisor.source(sup)
+      source_topic = AdaptorsSupervisor.source_topic(sup)
+
+      {:ok, existing} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(schema_data: nil, schema_sha256: nil)
+        )
+
+      two_hours_ago = DateTime.add(DateTime.utc_now(), -2, :hour)
+
+      {1, _} =
+        Lightning.Repo.update_all(
+          from(a in Lightning.Adaptors.Catalogue.Adaptor,
+            where: a.id == ^existing.id
+          ),
+          set: [updated_at: two_hours_ago]
+        )
+
+      expect(Lightning.Adaptors.StrategyMock, :list_adaptors, fn ->
+        {:ok, [%{name: "@openfn/language-http", latest_version: "1.0.0"}]}
+      end)
+
+      expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, 0, fn _ ->
+        :unreachable
+      end)
+
+      :ok = Phoenix.PubSub.subscribe(Lightning.PubSub, source_topic)
+      start_scheduler(sup)
+
+      sched_name = AdaptorsSupervisor.global_scheduler_name(sup)
+
+      assert {:ok, %{fetched: 0, changed: 0, errors: 0}} =
+               Scheduler.await_refresh(sched_name, 5_000)
+
+      refute_receive {:changed, _, _}
+
+      row = Catalogue.get_adaptor("@openfn/language-http", source)
+      assert row.schema_data == nil
+      assert DateTime.compare(row.checked_at, existing.checked_at) == :gt
+    end
+
     test "changed adaptor: upsert and broadcast per changed name", %{sup: sup} do
       test_pid = self()
       source = AdaptorsSupervisor.source(sup)

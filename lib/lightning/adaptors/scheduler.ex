@@ -11,8 +11,10 @@ defmodule Lightning.Adaptors.Scheduler do
   leaves only on-demand refreshes.
 
   A tick lists the source, fetches the adaptors whose `latest_version`
-  changed or whose stored row has no schema (a refetch that still finds
-  no schema counts as touched), fetches icons in parallel,
+  changed or whose stored row has no schema and whose version landed
+  within the last hour (a refetch that still finds no schema counts as
+  touched; the window covers jsDelivr's mirroring lag, after which a
+  missing schema is taken as really missing), fetches icons in parallel,
   and upserts each changed adaptor with its icons. `refresh_package/2` refetches one
   adaptor without icons.
   """
@@ -27,6 +29,7 @@ defmodule Lightning.Adaptors.Scheduler do
   require Logger
 
   @fetch_max_concurrency 8
+  @schema_grace_ms :timer.hours(1)
   @icons_task_timeout :timer.seconds(60)
 
   @doc """
@@ -428,7 +431,8 @@ defmodule Lightning.Adaptors.Scheduler do
     existing = Map.get(existing_by_name, name)
     same_version? = !is_nil(existing) && existing.latest_version == version
 
-    if same_version? && not is_nil(existing.schema_data) do
+    if same_version? and
+         (not is_nil(existing.schema_data) or older_than_grace?(existing)) do
       Catalogue.touch_checked_at(name, state.source)
       :touched
     else
@@ -454,6 +458,11 @@ defmodule Lightning.Adaptors.Scheduler do
           {:error, reason}
       end
     end
+  end
+
+  defp older_than_grace?(%{updated_at: updated_at}) do
+    DateTime.diff(DateTime.utc_now(), updated_at, :millisecond) >
+      @schema_grace_ms
   end
 
   # jsDelivr 404s for a version it has not mirrored yet, which is
