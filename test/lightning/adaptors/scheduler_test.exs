@@ -742,12 +742,12 @@ defmodule Lightning.Adaptors.SchedulerTest do
           source,
           "@openfn/language-http",
           :square,
-          "png"
+          "png",
+          sha
         )
 
       assert File.exists?(icon_path)
       assert File.read!(icon_path) == bytes
-      File.rm!(icon_path)
     end
 
     test "fetch_icons error: records still persist without icons", %{sup: sup} do
@@ -832,16 +832,6 @@ defmodule Lightning.Adaptors.SchedulerTest do
       assert row.latest_version == "1.0.0"
       assert row.icon_square_ext == "png"
       assert row.icon_square_sha256 == new_sha
-
-      icon_path =
-        Lightning.Adaptors.IconCache.path(
-          source,
-          "@openfn/language-http",
-          :square,
-          "png"
-        )
-
-      File.rm(icon_path)
     end
 
     test "self-heals iconless rows on the periodic tick", %{sup: sup} do
@@ -887,16 +877,6 @@ defmodule Lightning.Adaptors.SchedulerTest do
       row = Catalogue.get_adaptor("@openfn/language-stale", source)
       assert row.icon_square_ext == "png"
       assert row.icon_square_sha256 == sha
-
-      icon_path =
-        Lightning.Adaptors.IconCache.path(
-          source,
-          "@openfn/language-stale",
-          :square,
-          "png"
-        )
-
-      File.rm(icon_path)
     end
   end
 
@@ -1128,11 +1108,6 @@ defmodule Lightning.Adaptors.SchedulerTest do
 
       current = Catalogue.get_adaptor("@openfn/language-current", source)
       assert current.icon_square_sha256 == new_sha
-
-      for name <- ["@openfn/language-empty", "@openfn/language-current"] do
-        Lightning.Adaptors.IconCache.path(source, name, :square, "png")
-        |> File.rm()
-      end
     end
 
     test "leaves rows whose shape sha256 already matches unchanged, passing prior etag",
@@ -1213,14 +1188,6 @@ defmodule Lightning.Adaptors.SchedulerTest do
       row = Catalogue.get_adaptor("@openfn/language-rotated", source)
       assert row.icon_square_sha256 == new_sha
       assert row.icon_square_etag == new_etag
-
-      Lightning.Adaptors.IconCache.path(
-        source,
-        "@openfn/language-rotated",
-        :square,
-        "png"
-      )
-      |> File.rm()
     end
 
     test "preserves existing etag when fetched entry's etag is nil or missing",
@@ -1286,11 +1253,6 @@ defmodule Lightning.Adaptors.SchedulerTest do
       row_b = Catalogue.get_adaptor("@openfn/language-no-etag-key", source)
       assert row_b.icon_square_sha256 == new_sha_b
       assert row_b.icon_square_etag == prior_etag
-
-      for name <- ["@openfn/language-nil-etag", "@openfn/language-no-etag-key"] do
-        Lightning.Adaptors.IconCache.path(source, name, :square, "png")
-        |> File.rm()
-      end
     end
 
     test "mixed 304 and 200: unchanged row preserves its etag verbatim",
@@ -1360,14 +1322,6 @@ defmodule Lightning.Adaptors.SchedulerTest do
 
       assert current_row.icon_square_sha256 == current_sha
       assert current_row.icon_square_etag == current_etag
-
-      Lightning.Adaptors.IconCache.path(
-        source,
-        "@openfn/language-stale-etag",
-        :square,
-        "png"
-      )
-      |> File.rm()
     end
 
     test "surfaces a strategy fetch error as {:error, reason}", %{sup: sup} do

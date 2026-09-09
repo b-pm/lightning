@@ -522,7 +522,7 @@ defmodule Lightning.Adaptors.Scheduler do
     case Map.get(package_icons, shape) do
       %{data: bytes, ext: ext, sha256: sha} = entry when is_binary(bytes) ->
         try do
-          {:ok, ^sha} = IconCache.write!(source, record.name, shape, ext, bytes)
+          IconCache.write!(source, record.name, shape, ext, bytes, sha)
 
           record
           |> Map.put(:"icon_#{shape}_ext", ext)
@@ -625,7 +625,7 @@ defmodule Lightning.Adaptors.Scheduler do
     ext_key = :"icon_#{shape}_ext"
     etag_key = :"icon_#{shape}_etag"
 
-    {:ok, ^sha} = IconCache.write!(state.source, row.name, shape, ext, bytes)
+    IconCache.write!(state.source, row.name, shape, ext, bytes, sha)
 
     acc
     |> Map.put(ext_key, ext)

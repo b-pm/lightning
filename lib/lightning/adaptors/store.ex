@@ -92,7 +92,7 @@ defmodule Lightning.Adaptors.Store do
          {:ok, ext} <- ext_for_shape(meta, shape),
          {:ok, expected_sha} <- sha256_for_shape(meta, shape) do
       if IconCache.cached?(source, name, shape, ext, expected_sha) do
-        {:ok, IconCache.path(source, name, shape, ext)}
+        {:ok, IconCache.path(source, name, shape, ext, expected_sha)}
       else
         cache
         |> Cachex.fetch(
@@ -112,8 +112,9 @@ defmodule Lightning.Adaptors.Store do
       {:ok, %{data: bytes, ext: ^ext}} ->
         case :crypto.hash(:sha256, bytes) do
           ^expected_sha ->
-            {:ok, _sha} = IconCache.write!(source, name, shape, ext, bytes)
-            {:ignore, {:ok, IconCache.path(source, name, shape, ext)}}
+            {:ignore,
+             {:ok,
+              IconCache.write!(source, name, shape, ext, bytes, expected_sha)}}
 
           got ->
             {:commit,

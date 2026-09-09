@@ -288,14 +288,14 @@ defmodule Lightning.Adaptors.StoreTest do
           )
         )
 
-      {:ok, _} =
-        Lightning.Adaptors.IconCache.write!(
-          source,
-          name,
-          :square,
-          "png",
-          "PRE_WARMED"
-        )
+      Lightning.Adaptors.IconCache.write!(
+        source,
+        name,
+        :square,
+        "png",
+        "PRE_WARMED",
+        :crypto.hash(:sha256, "PRE_WARMED")
+      )
 
       expect(Lightning.Adaptors.StrategyMock, :fetch_icon, 0, fn _, _ ->
         :unreachable
@@ -320,14 +320,14 @@ defmodule Lightning.Adaptors.StoreTest do
           )
         )
 
-      {:ok, _} =
-        Lightning.Adaptors.IconCache.write!(
-          source,
-          name,
-          :square,
-          "png",
-          "STALE_BYTES"
-        )
+      Lightning.Adaptors.IconCache.write!(
+        source,
+        name,
+        :square,
+        "png",
+        "STALE_BYTES",
+        :crypto.hash(:sha256, "STALE_BYTES")
+      )
 
       expect(Lightning.Adaptors.StrategyMock, :fetch_icon, 1, fn ^name,
                                                                  :square ->
