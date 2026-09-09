@@ -69,8 +69,9 @@ defmodule Lightning.Adaptors.IconCache do
 
   The write is staged in a sibling temp file and then renamed into
   place, so concurrent readers never observe a half-written file. Any
-  superseded file for the same shape and extension is removed first,
-  so a rename never lands on a directory left empty by its own sweep.
+  superseded file for the same shape, whatever its extension or
+  pre-sha naming, is removed first, so a rename never lands on a
+  directory left empty by its own sweep.
   """
   @spec write!(source(), name(), shape(), ext(), binary(), binary()) ::
           Path.t()
@@ -84,7 +85,7 @@ defmodule Lightning.Adaptors.IconCache do
 
     try do
       File.write!(temp_path, bytes)
-      remove_superseded(dir, shape, ext, final_path)
+      remove_superseded(dir, shape, final_path)
       File.rename!(temp_path, final_path)
     rescue
       e ->
@@ -95,9 +96,9 @@ defmodule Lightning.Adaptors.IconCache do
     final_path
   end
 
-  defp remove_superseded(dir, shape, ext, final_path) do
+  defp remove_superseded(dir, shape, final_path) do
     dir
-    |> Path.join("#{shape}.*.#{ext}")
+    |> Path.join("#{shape}.*")
     |> Path.wildcard()
     |> Enum.reject(&(&1 == final_path))
     |> Enum.each(&File.rm/1)

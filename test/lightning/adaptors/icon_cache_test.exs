@@ -124,6 +124,35 @@ defmodule Lightning.Adaptors.IconCacheTest do
       refute File.exists?(old_path)
     end
 
+    test "removes the superseded file even when the extension changed" do
+      old_path = write("re-ext", "first")
+
+      new_path =
+        IconCache.write!(
+          :npm,
+          "re-ext",
+          :square,
+          "svg",
+          "second",
+          :crypto.hash(:sha256, "second")
+        )
+
+      assert String.ends_with?(new_path, ".svg")
+      assert File.exists?(new_path)
+      refute File.exists?(old_path)
+    end
+
+    test "removes a pre-sha legacy file for the same shape" do
+      new_path = write("legacy", "bytes")
+      legacy = Path.join(Path.dirname(new_path), "square.png")
+      File.write!(legacy, "old")
+
+      write("legacy", "bytes")
+
+      refute File.exists?(legacy)
+      assert File.exists?(new_path)
+    end
+
     test "leaves the other shape alone when sweeping" do
       square = write("two-shapes", "sq")
       rectangle = write("two-shapes", "rect", :rectangle)
