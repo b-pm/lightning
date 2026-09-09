@@ -108,10 +108,11 @@ defmodule Lightning.Adaptors.NPMTest do
       assert old.deprecated == true
     end
 
-    test "degrades to nil schema when jsDelivr returns 5xx", %{
-      registry: registry,
-      jsdelivr: jsdelivr
-    } do
+    test "fails the whole record when jsDelivr returns 5xx",
+         %{
+           registry: registry,
+           jsdelivr: jsdelivr
+         } do
       packument = build_packument()
 
       Bypass.expect(registry, "GET", "/" <> @package, fn conn ->
@@ -122,12 +123,8 @@ defmodule Lightning.Adaptors.NPMTest do
         Plug.Conn.resp(conn, 500, "")
       end)
 
-      {:ok, record} = NPM.fetch_adaptor(@package)
-
-      assert record.schema_data == nil
-      assert record.schema_sha256 == nil
-      assert record.name == @package
-      assert record.latest_version == @latest_version
+      assert {:error, {:schema_fetch_failed, _reason}} =
+               NPM.fetch_adaptor(@package)
     end
   end
 

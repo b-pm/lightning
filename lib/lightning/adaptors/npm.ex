@@ -40,10 +40,10 @@ defmodule Lightning.Adaptors.NPM do
   transient failures (5xx, timeout, nxdomain) of the *primary* request
   (`packument` for `fetch_adaptor/1`, the org package listing for
   `list_adaptors/0` and `fetch_icons/1`) surface as `{:error, term()}`
-  unchanged. The schema fetch inside `fetch_adaptor/1` and each icon
-  fetch inside `fetch_icons/1` are best-effort instead: a miss there
-  degrades to a nil schema or an absent icon shape, rather than failing
-  the whole record or batch.
+  unchanged, as does a failed schema fetch inside `fetch_adaptor/1`
+  (`{:error, {:schema_fetch_failed, reason}}`). Each icon fetch inside
+  `fetch_icons/1` is best-effort instead: a miss there degrades to an
+  absent icon shape rather than failing the batch.
 
   ## Configuration
 
@@ -67,9 +67,9 @@ defmodule Lightning.Adaptors.NPM do
   @impl Lightning.Adaptors.Strategy
   def fetch_adaptor(name) when is_binary(name) do
     with {:ok, packument} <- Registry.get_packument(name),
-         {:ok, latest_version} <- Registry.latest_version(packument) do
-      {schema_data, schema_sha} = Schema.schema(name, latest_version)
-
+         {:ok, latest_version} <- Registry.latest_version(packument),
+         {:ok, {schema_data, schema_sha256}} <-
+           schema(name, latest_version) do
       {:ok,
        %{
          name: Map.get(packument, "name", name),
@@ -79,22 +79,19 @@ defmodule Lightning.Adaptors.NPM do
          license: Map.get(packument, "license"),
          latest_version: latest_version,
          deprecated: Registry.deprecated?(packument, latest_version),
-         schema_data: encode_schema(schema_data),
-         schema_sha256: schema_sha,
-         versions: Registry.build_versions(packument)
+         versions: Registry.build_versions(packument),
+         schema_data: schema_data,
+         schema_sha256: schema_sha256
        }}
     end
   end
 
-  # Strategy boundary: re-encode the decoded schema map to a JSON binary
-  # so the row is persisted as text and `Jason.decode!(_,
-  # objects: :ordered_objects)` re-engages downstream. `Schema.schema/2`
-  # always decodes via `Jason.decode/1`, so `data` is a map (or nil) here,
-  # never a raw binary — the Local strategy's own raw-binary schema text
-  # takes a separate path (`Local.read_schema/1`) and never reaches this
-  # function.
-  defp encode_schema(nil), do: nil
-  defp encode_schema(data) when is_map(data), do: Jason.encode!(data)
+  defp schema(name, version) do
+    case Schema.schema(name, version) do
+      {:ok, pair} -> {:ok, pair}
+      {:error, reason} -> {:error, {:schema_fetch_failed, reason}}
+    end
+  end
 
   @impl Lightning.Adaptors.Strategy
   def fetch_icon(name, shape)

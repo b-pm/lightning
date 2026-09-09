@@ -10,9 +10,12 @@ defmodule Lightning.Adaptors.Scheduler do
   catalogue ticks at once. An interval of `0` disables the timer and
   leaves only on-demand refreshes.
 
-  A tick lists the source, fetches only the adaptors whose
-  `latest_version` changed, fetches icons in parallel, and upserts each
-  changed adaptor with its icons. `refresh_package/2` refetches one
+  A tick lists the source, fetches the adaptors whose `latest_version`
+  changed or whose stored row has no schema and whose version landed
+  within the last hour (a refetch that still finds no schema counts as
+  touched; the window covers jsDelivr's mirroring lag, after which a
+  missing schema is taken as really missing), fetches icons in parallel,
+  and upserts each changed adaptor with its icons. `refresh_package/2` refetches one
   adaptor without icons.
   """
 
@@ -26,6 +29,7 @@ defmodule Lightning.Adaptors.Scheduler do
   require Logger
 
   @fetch_max_concurrency 8
+  @schema_grace_ms :timer.hours(1)
   @icons_task_timeout :timer.seconds(60)
 
   @doc """
@@ -342,8 +346,7 @@ defmodule Lightning.Adaptors.Scheduler do
     existing_rows = Catalogue.list_adaptors(state.source)
     prior_etags = prior_etags_from_rows(existing_rows)
 
-    existing_by_name =
-      Map.new(existing_rows, fn a -> {a.name, a.latest_version} end)
+    existing_by_name = Map.new(existing_rows, fn a -> {a.name, a} end)
 
     icons_task =
       Task.Supervisor.async_nolink(state.tasks, fn ->
@@ -425,15 +428,27 @@ defmodule Lightning.Adaptors.Scheduler do
          existing_by_name,
          state
        ) do
-    if Map.get(existing_by_name, name) == version do
+    existing = Map.get(existing_by_name, name)
+    same_version? = !is_nil(existing) && existing.latest_version == version
+
+    if same_version? and
+         (not is_nil(existing.schema_data) or older_than_grace?(existing)) do
       Catalogue.touch_checked_at(name, state.source)
       :touched
     else
       case strategy.fetch_adaptor(name) do
-        {:ok, %{latest_version: version} = record} ->
-          Logger.debug("Adaptors[#{state.source}]: fetched #{name}@#{version}")
+        # Refetched only because the stored schema was nil, and upstream
+        # still has none: nothing to persist, so don't broadcast a change.
+        {:ok, %{schema_data: nil}} when same_version? ->
+          Catalogue.touch_checked_at(name, state.source)
+          :touched
 
-          {:fetched, record}
+        {:ok, %{latest_version: fetched_version} = record} ->
+          Logger.debug(
+            "Adaptors[#{state.source}]: fetched #{name}@#{fetched_version}"
+          )
+
+          {:fetched, keep_stored_schema(record, existing)}
 
         {:error, reason} ->
           Logger.warning(
@@ -444,6 +459,25 @@ defmodule Lightning.Adaptors.Scheduler do
       end
     end
   end
+
+  defp older_than_grace?(%{updated_at: updated_at}) do
+    DateTime.diff(DateTime.utc_now(), updated_at, :millisecond) >
+      @schema_grace_ms
+  end
+
+  # jsDelivr 404s for a version it has not mirrored yet, which is
+  # indistinguishable from a schema the source really dropped. On the
+  # periodic path we keep what we have; an operator refresh takes upstream
+  # as-is and is where a real removal lands.
+  defp keep_stored_schema(
+         %{schema_data: nil} = record,
+         %{schema_data: stored} = row
+       )
+       when not is_nil(stored) do
+    %{record | schema_data: stored, schema_sha256: row.schema_sha256}
+  end
+
+  defp keep_stored_schema(record, _existing), do: record
 
   defp await_icons(task) do
     case Task.yield(task, @icons_task_timeout) || Task.shutdown(task) do
@@ -497,7 +531,7 @@ defmodule Lightning.Adaptors.Scheduler do
     case Map.get(package_icons, shape) do
       %{data: bytes, ext: ext, sha256: sha} = entry when is_binary(bytes) ->
         try do
-          {:ok, ^sha} = IconCache.write!(source, record.name, shape, ext, bytes)
+          IconCache.write!(source, record.name, shape, ext, bytes, sha)
 
           record
           |> Map.put(:"icon_#{shape}_ext", ext)
@@ -600,7 +634,7 @@ defmodule Lightning.Adaptors.Scheduler do
     ext_key = :"icon_#{shape}_ext"
     etag_key = :"icon_#{shape}_etag"
 
-    {:ok, ^sha} = IconCache.write!(state.source, row.name, shape, ext, bytes)
+    IconCache.write!(state.source, row.name, shape, ext, bytes, sha)
 
     acc
     |> Map.put(ext_key, ext)

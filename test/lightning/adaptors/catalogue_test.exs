@@ -1,6 +1,8 @@
 defmodule Lightning.Adaptors.CatalogueTest do
   use Lightning.DataCase, async: true
 
+  import Lightning.AdaptorTestHelpers
+
   alias Lightning.Adaptors.Catalogue
   alias Lightning.Adaptors.Catalogue.Adaptor
   alias Lightning.Adaptors.Catalogue.AdaptorVersion
@@ -82,6 +84,27 @@ defmodule Lightning.Adaptors.CatalogueTest do
       assert second.id == first.id
       assert second.updated_at == first.updated_at
       assert DateTime.compare(second.checked_at, first.checked_at) == :gt
+    end
+  end
+
+  describe "upsert_adaptor/1 — schema clearing" do
+    test "genuinely removed schema does clear" do
+      {:ok, first} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(
+            schema_data: %{"type" => "object"},
+            schema_sha256: "abc"
+          )
+        )
+
+      {:ok, second} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(schema_data: nil, schema_sha256: nil)
+        )
+
+      assert second.id == first.id
+      assert second.schema_data == nil
+      assert second.schema_sha256 == nil
     end
   end
 
@@ -286,7 +309,7 @@ defmodule Lightning.Adaptors.CatalogueTest do
       assert meta.latest_version == "1.0.0"
       assert meta.description == "yep"
       assert meta.deprecated == false
-      assert %DateTime{} = meta.updated_at
+      assert meta.has_schema
 
       refute Map.has_key?(meta, :schema_data)
       refute Map.has_key?(meta, :homepage)
@@ -301,6 +324,27 @@ defmodule Lightning.Adaptors.CatalogueTest do
 
       assert [%{name: "@openfn/language-http"}] =
                Catalogue.list_package_metas(:local)
+    end
+
+    test "has_schema reflects whether schema_data is set" do
+      {:ok, _} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(
+            name: "@openfn/language-with-schema",
+            schema_data: %{"type" => "object"}
+          )
+        )
+
+      {:ok, _} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(name: "@openfn/language-no-schema", schema_data: nil)
+        )
+
+      metas = Catalogue.list_package_metas(:npm)
+
+      assert Enum.find(metas, &(&1.name == "@openfn/language-with-schema")).has_schema
+
+      refute Enum.find(metas, &(&1.name == "@openfn/language-no-schema")).has_schema
     end
 
     test "omits the excluded adaptors" do
@@ -405,49 +449,6 @@ defmodule Lightning.Adaptors.CatalogueTest do
     end
   end
 
-  describe "list_missing_icons/1" do
-    test "returns rows where either icon shape sha256 is nil" do
-      {:ok, _} = Catalogue.upsert_adaptor(adaptor_record(name: "@openfn/a"))
-
-      {:ok, _} =
-        Catalogue.upsert_adaptor(
-          adaptor_record(
-            name: "@openfn/b",
-            icon_square_ext: "png",
-            icon_square_sha256: :crypto.hash(:sha256, "x")
-          )
-        )
-
-      {:ok, _} =
-        Catalogue.upsert_adaptor(
-          adaptor_record(
-            name: "@openfn/c",
-            icon_square_ext: "png",
-            icon_square_sha256: :crypto.hash(:sha256, "y"),
-            icon_rectangle_ext: "png",
-            icon_rectangle_sha256: :crypto.hash(:sha256, "z")
-          )
-        )
-
-      names =
-        Catalogue.list_missing_icons(:npm)
-        |> Enum.map(& &1.name)
-        |> Enum.sort()
-
-      assert names == ["@openfn/a", "@openfn/b"]
-    end
-
-    test "is source-scoped" do
-      {:ok, _} =
-        Catalogue.upsert_adaptor(
-          adaptor_record(name: "@openfn/x", source: :local)
-        )
-
-      assert Catalogue.list_missing_icons(:npm) == []
-      assert [%{name: "@openfn/x"}] = Catalogue.list_missing_icons(:local)
-    end
-  end
-
   describe "update_icons/3" do
     test "writes only icon columns and bumps :updated_at" do
       {:ok, before} = Catalogue.upsert_adaptor(adaptor_record())
@@ -536,31 +537,6 @@ defmodule Lightning.Adaptors.CatalogueTest do
       assert [%AdaptorVersion{version: "1.0.0", size_bytes: 111}] =
                Catalogue.list_versions(adaptor.name, :npm)
     end
-  end
-
-  defp adaptor_record(overrides \\ []) do
-    overrides = Map.new(overrides)
-
-    %{
-      name: "@openfn/language-http",
-      source: :npm,
-      latest_version: "1.0.0",
-      description: "HTTP adaptor",
-      homepage: nil,
-      repository: nil,
-      license: "LGPL-3.0",
-      deprecated: false,
-      schema_data: nil,
-      schema_sha256: nil,
-      icon_square_ext: nil,
-      icon_rectangle_ext: nil,
-      icon_square_sha256: nil,
-      icon_rectangle_sha256: nil,
-      icon_square_etag: nil,
-      icon_rectangle_etag: nil,
-      versions: [version_record("1.0.0")]
-    }
-    |> Map.merge(overrides)
   end
 
   defp version_record(version, overrides \\ []) do

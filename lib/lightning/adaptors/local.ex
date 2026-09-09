@@ -56,7 +56,7 @@ defmodule Lightning.Adaptors.Local do
     with {:ok, records} <- discover() do
       case Enum.find(records, &(&1.name == name)) do
         nil -> {:error, :not_found}
-        record -> {:ok, build_adaptor_record(record)}
+        record -> build_adaptor_record(record)
       end
     end
   end
@@ -210,20 +210,22 @@ defmodule Lightning.Adaptors.Local do
 
   defp build_adaptor_record(record) do
     pkg = record.latest_package_json
-    {schema_data, schema_sha256} = read_schema(record.latest_path)
 
-    %{
-      name: record.name,
-      description: pkg["description"],
-      homepage: pkg["homepage"],
-      repository: extract_repository(pkg["repository"]),
-      license: pkg["license"],
-      latest_version: record.latest_version,
-      deprecated: false,
-      schema_data: schema_data,
-      schema_sha256: schema_sha256,
-      versions: Enum.map(record.versions, &build_version_record/1)
-    }
+    with {:ok, {schema_data, schema_sha256}} <- read_schema(record.latest_path) do
+      {:ok,
+       %{
+         name: record.name,
+         description: pkg["description"],
+         homepage: pkg["homepage"],
+         repository: extract_repository(pkg["repository"]),
+         license: pkg["license"],
+         latest_version: record.latest_version,
+         deprecated: false,
+         versions: Enum.map(record.versions, &build_version_record/1),
+         schema_data: schema_data,
+         schema_sha256: schema_sha256
+       }}
+    end
   end
 
   defp build_version_record(%{version: v, package_json: pkg}) do
@@ -241,20 +243,9 @@ defmodule Lightning.Adaptors.Local do
 
   defp read_schema(dir) do
     case File.read(Path.join(dir, @schema_filename)) do
-      {:ok, body} ->
-        # Validate JSON, but keep the raw binary so credential-form
-        # rendering can re-engage ordered_objects decoding downstream.
-        case Jason.decode(body) do
-          {:ok, _data} ->
-            sha = :sha256 |> :crypto.hash(body) |> Base.encode16(case: :lower)
-            {body, sha}
-
-          {:error, _} ->
-            {nil, nil}
-        end
-
-      {:error, _} ->
-        {nil, nil}
+      {:ok, body} -> Lightning.Adaptors.Strategy.digest_schema(body)
+      {:error, :enoent} -> {:ok, {nil, nil}}
+      {:error, reason} -> {:error, {:schema_fetch_failed, reason}}
     end
   end
 

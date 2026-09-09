@@ -37,7 +37,7 @@ defmodule Lightning.Adaptors.NPM.SchemaTest do
   end
 
   describe "schema/2" do
-    test "returns the decoded schema and a hex sha256 on 200", %{bypass: bypass} do
+    test "returns the raw body and a hex sha256 on 200", %{bypass: bypass} do
       schema = %{"type" => "object", "properties" => %{"baseUrl" => %{}}}
       body = Jason.encode!(schema)
 
@@ -51,7 +51,7 @@ defmodule Lightning.Adaptors.NPM.SchemaTest do
         Plug.Conn.resp(conn, 200, body)
       end)
 
-      assert {^schema, ^expected_sha} = Schema.schema(@package, @version)
+      assert {:ok, {^body, ^expected_sha}} = Schema.schema(@package, @version)
     end
 
     test "returns {nil, nil} on 404", %{bypass: bypass} do
@@ -59,28 +59,32 @@ defmodule Lightning.Adaptors.NPM.SchemaTest do
         Plug.Conn.resp(conn, 404, "")
       end)
 
-      assert {nil, nil} = Schema.schema(@package, @version)
+      assert {:ok, {nil, nil}} = Schema.schema(@package, @version)
     end
 
-    test "returns {nil, nil} on 5xx", %{bypass: bypass} do
+    test "returns an error on 5xx", %{bypass: bypass} do
       Bypass.expect(bypass, "GET", @path, fn conn ->
         Plug.Conn.resp(conn, 500, "")
       end)
 
-      assert {nil, nil} = Schema.schema(@package, @version)
+      assert {:error, {:http_status, 500}} = Schema.schema(@package, @version)
     end
 
-    test "returns {nil, nil} on invalid JSON body", %{bypass: bypass} do
+    test "returns an error on invalid JSON body", %{
+      bypass: bypass
+    } do
       Bypass.expect(bypass, "GET", @path, fn conn ->
         Plug.Conn.resp(conn, 200, "this is not json {")
       end)
 
-      assert {nil, nil} = Schema.schema(@package, @version)
+      assert {:error, %Jason.DecodeError{}} = Schema.schema(@package, @version)
     end
 
-    test "returns {nil, nil} on connection refused", %{bypass: bypass} do
+    test "returns an error on connection refused", %{
+      bypass: bypass
+    } do
       Bypass.down(bypass)
-      assert {nil, nil} = Schema.schema(@package, @version)
+      assert {:error, _reason} = Schema.schema(@package, @version)
     end
   end
 end

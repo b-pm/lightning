@@ -47,18 +47,22 @@ defmodule Lightning.Adaptors.Strategy do
   The structured adaptor record returned by `c:fetch_adaptor/1`. Icon
   fields are persisted separately by the Scheduler after joining
   `c:fetch_icons/1` — they are not stamped onto this record.
+
+  `schema_data` is the credential schema as a JSON binary. `nil` means
+  the source sees no schema for this version; the Scheduler decides
+  whether that replaces a stored one.
   """
   @type adaptor_record :: %{
-          name: String.t(),
-          description: String.t() | nil,
-          homepage: String.t() | nil,
-          repository: String.t() | nil,
-          license: String.t() | nil,
-          latest_version: String.t(),
-          deprecated: boolean(),
-          schema_data: map() | nil,
-          schema_sha256: String.t() | nil,
-          versions: [version_record()]
+          required(:name) => String.t(),
+          required(:description) => String.t() | nil,
+          required(:homepage) => String.t() | nil,
+          required(:repository) => String.t() | nil,
+          required(:license) => String.t() | nil,
+          required(:latest_version) => String.t(),
+          required(:deprecated) => boolean(),
+          required(:schema_data) => String.t() | nil,
+          required(:schema_sha256) => String.t() | nil,
+          required(:versions) => [version_record()]
         }
 
   @typedoc """
@@ -145,4 +149,20 @@ defmodule Lightning.Adaptors.Strategy do
   @callback list_adaptors() ::
               {:ok, [%{name: String.t(), latest_version: String.t()}]}
               | {:error, term()}
+
+  @doc """
+  Validate a schema body and pair it with its persisted digest.
+
+  Returns `{:ok, {body, sha256_hex}}` when `body` decodes as JSON, with
+  `sha256_hex` lowercase hex, matching the `adaptors.schema_sha256`
+  column format. `{:error, reason}` when it doesn't decode.
+  """
+  @spec digest_schema(binary()) ::
+          {:ok, {binary(), String.t()}} | {:error, term()}
+  def digest_schema(body) do
+    with {:ok, _} <- Jason.decode(body) do
+      sha = :sha256 |> :crypto.hash(body) |> Base.encode16(case: :lower)
+      {:ok, {body, sha}}
+    end
+  end
 end

@@ -3,10 +3,10 @@ defmodule Lightning.Adaptors.Store do
   Cached reads over `Lightning.Adaptors.Catalogue`.
 
   Every read checks the instance's Cachex first and falls back to the
-  catalogue table. `schema/2` and `versions/2` also fetch from the
-  strategy when the row has no data yet and persist what they get; this
-  only fills gaps on adaptors already in the catalogue, and an unknown
-  name returns `{:error, :not_found}`. `icon/3` returns a path on disk,
+  catalogue table. Reads never write to the catalogue: the
+  `Lightning.Adaptors.Scheduler` is the only writer, so a row with no
+  schema means the source has none and `schema/2` answers `"{}"`, while
+  an unknown name returns `{:error, :not_found}`. `icon/3` returns a path on disk,
   fetching the bytes from the strategy on the first miss. `catalogue/1`
   caches the picker payload already rendered, together with the ETag
   stamp that describes it.
@@ -20,14 +20,6 @@ defmodule Lightning.Adaptors.Store do
 
   @type sup :: atom()
 
-  @type version_meta :: %{
-          version: String.t(),
-          integrity: String.t() | nil,
-          size_bytes: integer() | nil,
-          published_at: DateTime.t() | nil,
-          deprecated: boolean()
-        }
-
   @type icon_meta :: %{
           icon_square_ext: String.t() | nil,
           icon_rectangle_ext: String.t() | nil,
@@ -37,7 +29,11 @@ defmodule Lightning.Adaptors.Store do
 
   @type package_meta :: Catalogue.package_meta()
 
-  @type catalogue_entry :: %{
+  @typedoc """
+  One `t:Lightning.Adaptors.Catalogue.catalogue_entry/0` with its icon
+  fields rendered to URLs, as the catalogue endpoint serves it.
+  """
+  @type rendered_entry :: %{
           name: String.t(),
           latest_version: String.t(),
           versions: [String.t()],
@@ -49,10 +45,12 @@ defmodule Lightning.Adaptors.Store do
         }
 
   @type catalogue ::
-          {{DateTime.t() | nil, non_neg_integer()}, [catalogue_entry()]}
+          {{DateTime.t() | nil, non_neg_integer()}, [rendered_entry()]}
 
   @doc """
   Returns the adaptor's credential schema as a JSON binary, not decoded.
+  An adaptor with no schema yields `"{}"`; an unknown name
+  `{:error, :not_found}`.
   """
   @spec schema(sup(), String.t()) :: {:ok, String.t()} | {:error, term()}
   def schema(sup, name) do
@@ -64,34 +62,14 @@ defmodule Lightning.Adaptors.Store do
       {:schema, name, source},
       fn _key ->
         case Catalogue.get_adaptor(name, source) do
+          nil ->
+            {:ignore, {:error, :not_found}}
+
           %{schema_data: data} when not is_nil(data) ->
             {:commit, {:ok, data}}
 
           _ ->
-            fetch_and_persist(sup, name, source, :schema_data)
-        end
-      end,
-      timeout: Config.cache_timeout_ms()
-    )
-    |> unwrap()
-  end
-
-  @doc """
-  Returns the adaptor's version history as `t:version_meta/0` maps.
-  """
-  @spec versions(sup(), String.t()) ::
-          {:ok, [version_meta()]} | {:error, term()}
-  def versions(sup, name) do
-    cache = AdaptorsSupervisor.cache_name(sup)
-    source = AdaptorsSupervisor.source(sup)
-
-    cache
-    |> Cachex.fetch(
-      {:versions, name, source},
-      fn _key ->
-        case Catalogue.list_versions(name, source) do
-          [] -> fetch_and_persist(sup, name, source, :versions)
-          rows -> {:commit, {:ok, project_versions(rows)}}
+            {:commit, {:ok, "{}"}}
         end
       end,
       timeout: Config.cache_timeout_ms()
@@ -112,14 +90,16 @@ defmodule Lightning.Adaptors.Store do
 
     with {:ok, meta} <- icon_meta(sup, name),
          {:ok, ext} <- ext_for_shape(meta, shape),
-         {:ok, _sha256} <- sha256_for_shape(meta, shape) do
-      if IconCache.cached?(source, name, shape, ext) do
-        {:ok, IconCache.path(source, name, shape, ext)}
+         {:ok, expected_sha} <- sha256_for_shape(meta, shape) do
+      if IconCache.cached?(source, name, shape, ext, expected_sha) do
+        {:ok, IconCache.path(source, name, shape, ext, expected_sha)}
       else
         cache
         |> Cachex.fetch(
           {:icon_bytes, source, name, shape},
-          fn _key -> fetch_icon_bytes(strategy, source, name, shape, ext) end,
+          fn _key ->
+            fetch_icon_bytes(strategy, source, name, shape, ext, expected_sha)
+          end,
           timeout: Config.cache_timeout_ms()
         )
         |> unwrap()
@@ -127,15 +107,25 @@ defmodule Lightning.Adaptors.Store do
     end
   end
 
-  defp fetch_icon_bytes(strategy, source, name, shape, ext) do
+  defp fetch_icon_bytes(strategy, source, name, shape, ext, expected_sha) do
     case strategy.fetch_icon(name, shape) do
       {:ok, %{data: bytes, ext: ^ext}} ->
-        {:ok, _sha} = IconCache.write!(source, name, shape, ext, bytes)
-        {:ignore, {:ok, IconCache.path(source, name, shape, ext)}}
+        case :crypto.hash(:sha256, bytes) do
+          ^expected_sha ->
+            {:ignore,
+             {:ok,
+              IconCache.write!(source, name, shape, ext, bytes, expected_sha)}}
+
+          got ->
+            {:commit,
+             {:error, {:icon_sha_mismatch, expected: expected_sha, got: got}}}
+        end
 
       {:ok, %{ext: other_ext}} ->
-        {:ignore, {:error, {:ext_mismatch, expected: ext, got: other_ext}}}
+        {:commit, {:error, {:ext_mismatch, expected: ext, got: other_ext}}}
 
+      # A transport failure says nothing about the icon, so it is never
+      # cached; only a disagreement between the row and the bytes is.
       {:error, _} = err ->
         {:ignore, err}
     end
@@ -257,7 +247,7 @@ defmodule Lightning.Adaptors.Store do
   end
 
   @spec render_entry(Catalogue.catalogue_entry(), Catalogue.source()) ::
-          catalogue_entry()
+          rendered_entry()
   defp render_entry(entry, source) do
     %{
       name: entry.name,
@@ -272,53 +262,6 @@ defmodule Lightning.Adaptors.Store do
     }
   end
 
-  # Lazy fetches only fill gaps on adaptors already in the catalogue;
-  # they never add one.
-  @spec fetch_and_persist(atom(), String.t(), :npm | :local, atom()) ::
-          {:commit, {:ok, term()}} | {:ignore, {:error, term()}}
-  defp fetch_and_persist(sup, name, source, field) do
-    if Catalogue.get_adaptor(name, source) do
-      fetch_and_persist_known(sup, name, source, field)
-    else
-      {:ignore, {:error, :not_found}}
-    end
-  end
-
-  defp fetch_and_persist_known(sup, name, source, field) do
-    case AdaptorsSupervisor.strategy(sup).fetch_adaptor(name) do
-      {:ok, %{name: ^name} = record} ->
-        record =
-          record
-          |> Map.put(:source, source)
-          |> normalize_schema_data()
-
-        {:ok, _} = Catalogue.upsert_adaptor(record)
-        {:commit, {:ok, record |> Map.get(field) |> project_field(field)}}
-
-      {:ok, %{name: other}} ->
-        {:ignore, {:error, {:name_mismatch, other}}}
-
-      {:error, reason} ->
-        {:ignore, {:error, reason}}
-    end
-  end
-
-  # Both cache paths must store the same projected shape.
-  defp project_field(rows, :versions) when is_list(rows),
-    do: project_versions(rows)
-
-  defp project_field(value, _field), do: value
-
-  # The real strategies already encode schema_data to a JSON binary, but
-  # a strategy is still free to hand back a map, so normalize here to
-  # keep the cached value consistent with what a DB-backed read returns.
-  defp normalize_schema_data(%{schema_data: data} = record)
-       when is_map(data) and not is_struct(data) do
-    %{record | schema_data: Jason.encode!(data)}
-  end
-
-  defp normalize_schema_data(record), do: record
-
   @spec project_icon_meta(map()) :: icon_meta()
   defp project_icon_meta(adaptor) do
     Map.take(adaptor, [
@@ -327,20 +270,6 @@ defmodule Lightning.Adaptors.Store do
       :icon_square_sha256,
       :icon_rectangle_sha256
     ])
-  end
-
-  @spec project_versions([map()]) :: [version_meta()]
-  defp project_versions(rows) do
-    Enum.map(
-      rows,
-      &Map.take(&1, [
-        :version,
-        :integrity,
-        :size_bytes,
-        :published_at,
-        :deprecated
-      ])
-    )
   end
 
   @spec ext_for_shape(icon_meta(), :square | :rectangle) ::
@@ -367,10 +296,11 @@ defmodule Lightning.Adaptors.Store do
   #   * `{:ignore, value}` — fallback ran and chose not to cache
   #   * `{:error, term}` — Cachex-side failure (fallback raised, etc.)
   #
-  # Our fallbacks return `{:commit, {:ok, _}}` / `{:ignore, {:error, _}}`,
-  # so the wrapper tuple's second element is itself the public
-  # `{:ok, _} | {:error, _}` we want to return. Cachex-side `{:error, _}`
-  # passes through unchanged.
+  # Every fallback returns an inner `{:ok, _} | {:error, _}`, whichever
+  # wrapper it chooses, so the wrapper tuple's second element is itself
+  # the public value we want to return, including a committed
+  # `{:error, _}`, which comes back as `{:ok, {:error, _}}` on a later
+  # hit. Cachex-side `{:error, _}` passes through unchanged.
   @spec unwrap(tuple()) :: {:ok, term()} | {:error, term()}
   defp unwrap({:ok, inner}), do: inner
   defp unwrap({:commit, inner}), do: inner

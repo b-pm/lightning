@@ -2874,4 +2874,17 @@ defmodule Lightning.CredentialsTest do
       assert Repo.get!(Credential, custom.id).schema == "totally-custom"
     end
   end
+
+  describe "get_schema/1" do
+    setup :isolated_adaptors
+
+    test "returns the adaptor's schema when one is present" do
+      seed_credential_schema("http")
+
+      assert %Credentials.Schema{fields: fields} =
+               Credentials.get_schema("@openfn/language-http")
+
+      assert fields != []
+    end
+  end
 end
