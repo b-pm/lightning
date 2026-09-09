@@ -30,11 +30,10 @@ defmodule Lightning.Adaptors.NPM.Schema do
   @spec schema(String.t(), String.t()) ::
           {:ok, {String.t(), String.t()}} | {:ok, {nil, nil}} | {:error, term()}
   def schema(name, version) do
-    with {:ok, body} <- fetch_schema_bytes(name, version) do
-      Lightning.Adaptors.Strategy.digest_schema(body)
-    else
+    case fetch_schema_bytes(name, version) do
+      {:ok, body} -> Lightning.Adaptors.Strategy.digest_schema(body)
       {:error, {:http_status, 404}} -> {:ok, {nil, nil}}
-      {:error, reason} -> {:error, reason}
+      {:error, _} = err -> err
     end
   end
 

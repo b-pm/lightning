@@ -242,9 +242,8 @@ defmodule Lightning.Adaptors.Local do
   end
 
   defp read_schema(dir) do
-    with {:ok, body} <- File.read(Path.join(dir, @schema_filename)) do
-      Lightning.Adaptors.Strategy.digest_schema(body)
-    else
+    case File.read(Path.join(dir, @schema_filename)) do
+      {:ok, body} -> Lightning.Adaptors.Strategy.digest_schema(body)
       {:error, :enoent} -> {:ok, {nil, nil}}
       {:error, reason} -> {:error, {:schema_fetch_failed, reason}}
     end
