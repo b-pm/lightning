@@ -14,19 +14,6 @@ defmodule Lightning.AdaptorsTest do
   setup :verify_on_exit!
   setup :isolated_adaptors
 
-  defp version_record(version) do
-    %{
-      version: version,
-      integrity: "sha512-#{version}",
-      tarball_url: "https://example.com/x/-/x-#{version}.tgz",
-      size_bytes: 1024,
-      dependencies: %{},
-      peer_dependencies: %{},
-      published_at: nil,
-      deprecated: false
-    }
-  end
-
   defp start_scheduler(sup) do
     original_env = Application.get_env(:lightning, Lightning.Adaptors, [])
 
