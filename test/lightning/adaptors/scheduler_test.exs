@@ -788,6 +788,8 @@ defmodule Lightning.Adaptors.SchedulerTest do
       {:ok, _} =
         Catalogue.upsert_adaptor(
           adaptor_record(
+            schema_data: ~s({"type":"object"}),
+            schema_sha256: "sha-1",
             icon_square_ext: "png",
             icon_square_sha256: old_sha,
             # Both icon shapes already exist on the row; only the square
@@ -800,7 +802,7 @@ defmodule Lightning.Adaptors.SchedulerTest do
       new_bytes = "NEW_ICON_BYTES"
       new_sha = :crypto.hash(:sha256, new_bytes)
 
-      # Upstream reports the same version, so the diff path marks this
+      # Same version and a stored schema, so the diff path marks this
       # adaptor :touched instead of re-fetching it — only the icon changed.
       expect(Lightning.Adaptors.StrategyMock, :list_adaptors, fn ->
         {:ok, [%{name: "@openfn/language-http", latest_version: "1.0.0"}]}
@@ -824,7 +826,7 @@ defmodule Lightning.Adaptors.SchedulerTest do
       start_scheduler(sup)
 
       sched_name = AdaptorsSupervisor.global_scheduler_name(sup)
-      :ok = Scheduler.refresh_now(sched_name)
+      assert {:ok, %{errors: 0}} = Scheduler.await_refresh(sched_name, 5_000)
 
       assert_receive {:changed, "@openfn/language-http", ^source}, 2000
 
@@ -837,11 +839,17 @@ defmodule Lightning.Adaptors.SchedulerTest do
     test "self-heals iconless rows on the periodic tick", %{sup: sup} do
       source = AdaptorsSupervisor.source(sup)
 
-      # Pre-seed a row that already matches the listed latest_version
-      # (so the diff path will :touch instead of :fetch). Without
-      # self-heal this row would stay iconless forever.
+      # Pre-seed a row that already matches the listed latest_version and
+      # has a schema (so the diff path will :touch instead of :fetch).
+      # Without self-heal this row would stay iconless forever.
       {:ok, _} =
-        Catalogue.upsert_adaptor(adaptor_record(name: "@openfn/language-stale"))
+        Catalogue.upsert_adaptor(
+          adaptor_record(
+            name: "@openfn/language-stale",
+            schema_data: ~s({"type":"object"}),
+            schema_sha256: "sha-1"
+          )
+        )
 
       bytes = "STALE_ICON"
       sha = :crypto.hash(:sha256, bytes)
@@ -870,7 +878,7 @@ defmodule Lightning.Adaptors.SchedulerTest do
       # The pre-seeded row pushes max_checked_at to "now", so init
       # delay = full interval — drive the tick explicitly.
       sched_name = AdaptorsSupervisor.global_scheduler_name(sup)
-      :ok = Scheduler.refresh_now(sched_name)
+      assert {:ok, %{errors: 0}} = Scheduler.await_refresh(sched_name, 5_000)
 
       assert_receive {:changed, "@openfn/language-stale", ^source}, 2000
 
