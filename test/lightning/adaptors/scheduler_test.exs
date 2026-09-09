@@ -223,7 +223,14 @@ defmodule Lightning.Adaptors.SchedulerTest do
       source = AdaptorsSupervisor.source(sup)
       source_topic = AdaptorsSupervisor.source_topic(sup)
 
-      {:ok, existing} = Catalogue.upsert_adaptor(adaptor_record())
+      {:ok, existing} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(
+            schema_data: ~s({"type":"object"}),
+            schema_sha256: "sha-1"
+          )
+        )
+
       checked_at_before = existing.checked_at
 
       expect(Lightning.Adaptors.StrategyMock, :list_adaptors, fn ->
@@ -251,6 +258,50 @@ defmodule Lightning.Adaptors.SchedulerTest do
       row = Catalogue.get_adaptor("@openfn/language-http", source)
       assert DateTime.compare(row.checked_at, checked_at_before) == :gt
       assert row.latest_version == "1.0.0"
+    end
+
+    test "matching version with no stored schema: refetch and persist it", %{
+      sup: sup
+    } do
+      test_pid = self()
+      source = AdaptorsSupervisor.source(sup)
+
+      {:ok, _} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(schema_data: nil, schema_sha256: nil)
+        )
+
+      expect(Lightning.Adaptors.StrategyMock, :list_adaptors, fn ->
+        {:ok, [%{name: "@openfn/language-http", latest_version: "1.0.0"}]}
+      end)
+
+      expect(
+        Lightning.Adaptors.StrategyMock,
+        :fetch_adaptor,
+        1,
+        fn "@openfn/language-http" ->
+          send(test_pid, :fetch_adaptor_called)
+
+          {:ok,
+           adaptor_record(
+             schema_data: ~s({"type":"object"}),
+             schema_sha256: "sha-1"
+           )}
+        end
+      )
+
+      start_scheduler(sup)
+
+      sched_name = AdaptorsSupervisor.global_scheduler_name(sup)
+      Scheduler.refresh_now(sched_name)
+
+      assert_receive :fetch_adaptor_called, 2000
+      assert {:ok, %{fetched: 1}} = Scheduler.await_refresh(sched_name, 5_000)
+
+      row = Catalogue.get_adaptor("@openfn/language-http", source)
+      assert row.latest_version == "1.0.0"
+      assert row.schema_data == ~s({"type":"object"})
+      assert row.schema_sha256 == "sha-1"
     end
 
     test "changed adaptor: upsert and broadcast per changed name", %{sup: sup} do
@@ -559,7 +610,13 @@ defmodule Lightning.Adaptors.SchedulerTest do
   describe "await_refresh/2 result" do
     test "carries the cycle's counts on success, with per-adaptor failures as errors",
          %{sup: sup} do
-      {:ok, _} = Catalogue.upsert_adaptor(adaptor_record())
+      {:ok, _} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(
+            schema_data: ~s({"type":"object"}),
+            schema_sha256: "sha-1"
+          )
+        )
 
       expect(Lightning.Adaptors.StrategyMock, :list_adaptors, 1, fn ->
         {:ok,

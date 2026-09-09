@@ -10,9 +10,9 @@ defmodule Lightning.Adaptors.Scheduler do
   catalogue ticks at once. An interval of `0` disables the timer and
   leaves only on-demand refreshes.
 
-  A tick lists the source, fetches only the adaptors whose
-  `latest_version` changed, fetches icons in parallel, and upserts each
-  changed adaptor with its icons. `refresh_package/2` refetches one
+  A tick lists the source, fetches the adaptors whose `latest_version`
+  changed or whose stored row has no schema, fetches icons in parallel,
+  and upserts each changed adaptor with its icons. `refresh_package/2` refetches one
   adaptor without icons.
   """
 
@@ -426,7 +426,8 @@ defmodule Lightning.Adaptors.Scheduler do
        ) do
     existing = Map.get(existing_by_name, name)
 
-    if existing && existing.latest_version == version do
+    if existing && existing.latest_version == version &&
+         not is_nil(existing.schema_data) do
       Catalogue.touch_checked_at(name, state.source)
       :touched
     else
