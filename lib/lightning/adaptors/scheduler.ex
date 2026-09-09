@@ -11,7 +11,8 @@ defmodule Lightning.Adaptors.Scheduler do
   leaves only on-demand refreshes.
 
   A tick lists the source, fetches the adaptors whose `latest_version`
-  changed or whose stored row has no schema, fetches icons in parallel,
+  changed or whose stored row has no schema (a refetch that still finds
+  no schema counts as touched), fetches icons in parallel,
   and upserts each changed adaptor with its icons. `refresh_package/2` refetches one
   adaptor without icons.
   """
@@ -425,15 +426,23 @@ defmodule Lightning.Adaptors.Scheduler do
          state
        ) do
     existing = Map.get(existing_by_name, name)
+    same_version? = !is_nil(existing) && existing.latest_version == version
 
-    if existing && existing.latest_version == version &&
-         not is_nil(existing.schema_data) do
+    if same_version? && not is_nil(existing.schema_data) do
       Catalogue.touch_checked_at(name, state.source)
       :touched
     else
       case strategy.fetch_adaptor(name) do
-        {:ok, %{latest_version: version} = record} ->
-          Logger.debug("Adaptors[#{state.source}]: fetched #{name}@#{version}")
+        # Refetched only because the stored schema was nil, and upstream
+        # still has none: nothing to persist, so don't broadcast a change.
+        {:ok, %{schema_data: nil}} when same_version? ->
+          Catalogue.touch_checked_at(name, state.source)
+          :touched
+
+        {:ok, %{latest_version: fetched_version} = record} ->
+          Logger.debug(
+            "Adaptors[#{state.source}]: fetched #{name}@#{fetched_version}"
+          )
 
           {:fetched, keep_stored_schema(record, existing)}
 

@@ -304,6 +304,44 @@ defmodule Lightning.Adaptors.SchedulerTest do
       assert row.schema_sha256 == "sha-1"
     end
 
+    test "matching version, still no schema upstream: touch only", %{sup: sup} do
+      test_pid = self()
+      source = AdaptorsSupervisor.source(sup)
+      source_topic = AdaptorsSupervisor.source_topic(sup)
+
+      {:ok, existing} =
+        Catalogue.upsert_adaptor(
+          adaptor_record(schema_data: nil, schema_sha256: nil)
+        )
+
+      expect(Lightning.Adaptors.StrategyMock, :list_adaptors, fn ->
+        {:ok, [%{name: "@openfn/language-http", latest_version: "1.0.0"}]}
+      end)
+
+      expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, 1, fn
+        "@openfn/language-http" ->
+          send(test_pid, :fetch_adaptor_called)
+          {:ok, adaptor_record(schema_data: nil, schema_sha256: nil)}
+      end)
+
+      :ok = Phoenix.PubSub.subscribe(Lightning.PubSub, source_topic)
+      start_scheduler(sup)
+
+      sched_name = AdaptorsSupervisor.global_scheduler_name(sup)
+      Scheduler.refresh_now(sched_name)
+
+      assert_receive :fetch_adaptor_called, 2000
+
+      assert {:ok, %{fetched: 0, changed: 0}} =
+               Scheduler.await_refresh(sched_name, 5_000)
+
+      refute_receive {:changed, _, _}
+
+      row = Catalogue.get_adaptor("@openfn/language-http", source)
+      assert DateTime.compare(row.checked_at, existing.checked_at) == :gt
+      assert row.updated_at == existing.updated_at
+    end
+
     test "changed adaptor: upsert and broadcast per changed name", %{sup: sup} do
       test_pid = self()
       source = AdaptorsSupervisor.source(sup)
