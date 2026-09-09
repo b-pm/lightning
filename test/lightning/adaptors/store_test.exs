@@ -67,50 +67,15 @@ defmodule Lightning.Adaptors.StoreTest do
                Store.schema(sup, "@openfn/language-http")
     end
 
-    test "known adaptor with missing schema calls Strategy once, upserts to DB, broadcasts the change",
-         %{
-           sup: sup,
-           cache: cache
-         } do
-      source = AdaptorsSupervisor.source(sup)
-
-      Phoenix.PubSub.subscribe(
-        Lightning.PubSub,
-        AdaptorsSupervisor.source_topic(sup)
-      )
-
-      {:ok, _} = Catalogue.upsert_adaptor(adaptor_record(schema_data: nil))
-
-      expect(
-        Lightning.Adaptors.StrategyMock,
-        :fetch_adaptor,
-        1,
-        fn "@openfn/language-http" ->
-          {:ok, adaptor_record(schema_data: ~s({"type":"object"}))}
-        end
-      )
-
-      assert {:ok, ~s({"type":"object"})} =
-               Store.schema(sup, "@openfn/language-http")
-
-      assert_receive {:changed, "@openfn/language-http", ^source}
-
-      assert %{schema_data: ~s({"type":"object"})} =
-               Catalogue.get_adaptor("@openfn/language-http", source)
-
-      assert {:ok, nil} =
-               Cachex.get(cache, {:schema, "@openfn/language-http", source})
-    end
-
-    test "an adaptor the source confirms has no schema caches an empty one",
+    test "a row with no schema answers an empty one without calling Strategy",
          %{sup: sup, cache: cache} do
       source = AdaptorsSupervisor.source(sup)
       name = "@openfn/language-http"
 
       {:ok, _} = Catalogue.upsert_adaptor(adaptor_record(schema_data: nil))
 
-      expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, 1, fn ^name ->
-        {:ok, adaptor_record(schema_data: nil)}
+      expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, 0, fn _ ->
+        :unreachable
       end)
 
       assert {:ok, "{}"} = Store.schema(sup, name)
@@ -133,72 +98,7 @@ defmodule Lightning.Adaptors.StoreTest do
                Cachex.get(cache, {:schema, "@openfn/never-existed", source})
     end
 
-    test "three concurrent calls coalesce to one Strategy call", %{sup: sup} do
-      name = "@openfn/language-http"
-      test_pid = self()
-
-      {:ok, _} = Catalogue.upsert_adaptor(adaptor_record(schema_data: nil))
-
-      expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, 1, fn ^name ->
-        # Brief sleep so the other two tasks queue up in Cachex's courier.
-        Process.sleep(30)
-        {:ok, adaptor_record(schema_data: ~s({"type":"object"}))}
-      end)
-
-      tasks =
-        Enum.map(1..3, fn _ ->
-          Task.async(fn ->
-            receive do
-              :go -> Store.schema(sup, name)
-            end
-          end)
-        end)
-
-      # Allow all tasks to use the test process's Mox expectations before releasing them.
-      Enum.each(
-        tasks,
-        &Mox.allow(Lightning.Adaptors.StrategyMock, test_pid, &1.pid)
-      )
-
-      Enum.each(tasks, &send(&1.pid, :go))
-
-      results = Task.await_many(tasks, 5_000)
-      assert Enum.all?(results, &match?({:ok, ~s({"type":"object"})}, &1))
-    end
-
-    test "Strategy error returns {:error, _} and is not cached — next call retries",
-         %{
-           sup: sup,
-           cache: cache
-         } do
-      source = AdaptorsSupervisor.source(sup)
-
-      {:ok, _} = Catalogue.upsert_adaptor(adaptor_record(schema_data: nil))
-
-      expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, 1, fn _ ->
-        {:error, :upstream_error}
-      end)
-
-      assert {:error, :upstream_error} =
-               Store.schema(sup, "@openfn/language-http")
-
-      assert {:ok, nil} =
-               Cachex.get(cache, {:schema, "@openfn/language-http", source})
-
-      expect(
-        Lightning.Adaptors.StrategyMock,
-        :fetch_adaptor,
-        1,
-        fn "@openfn/language-http" ->
-          {:ok, adaptor_record(schema_data: ~s({"type":"object"}))}
-        end
-      )
-
-      assert {:ok, ~s({"type":"object"})} =
-               Store.schema(sup, "@openfn/language-http")
-    end
-
-    test "preserves JSON property order through the persistence round-trip",
+    test "preserves JSON property order from the stored row",
          %{sup: sup} do
       expect(Lightning.Adaptors.StrategyMock, :fetch_adaptor, 0, fn _ ->
         :unreachable
